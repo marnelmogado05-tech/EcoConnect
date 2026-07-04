@@ -1,0 +1,19 @@
+{
+    "name": "EcoConnect",
+    "short_name": "EcoConnect",
+    "description": "A Public-Driven Environmental Incident Reporting System for DENR CENRO Sanchez Mira.",
+    "start_url": "/",
+    "display": "fullscreen",
+    "background_color": "#ffffff",
+    "theme_color": "#1a472a",
+    "orientation": "portrait-primary",
+    "gcm_sender_id": "103953800507",
+    "icons": [
+        {
+            "src": "logo.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
