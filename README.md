@@ -1,4 +1,4 @@
-# EConnect
+# EcoConnect
 
 EConnect is a Laravel-based incident reporting and notification platform with Firebase push notification support, Excel exports, PWA capabilities, and a modern Tailwind/Vite frontend.
 
