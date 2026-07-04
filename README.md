@@ -1,61 +1,163 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# EConnect
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+EConnect is a Laravel-based incident reporting and notification platform with Firebase push notification support, Excel exports, PWA capabilities, and a modern Tailwind/Vite frontend.
 
-## About Laravel
+## Key Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Incident management and status tracking
+- Firebase Cloud Messaging (FCM) push notifications
+- User authentication and profile management
+- Event-driven notification dispatch via queues
+- Excel export support with `maatwebsite/excel`
+- Progressive Web App (PWA) support
+- Alpine.js UI enhancements and SweetAlert2 alerts
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Tech Stack
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.2
+- Laravel 12
+- MySQL / SQLite / supported Laravel database
+- Tailwind CSS
+- Vite
+- Alpine.js
+- Firebase (via `kreait/laravel-firebase`)
+- Excel export (`maatwebsite/excel`)
+- PWA support (`erag/laravel-pwa`)
 
-## Learning Laravel
+## Installation
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+1. Clone the repository:
+   ```bash
+   git clone <repo-url> EConnect
+   cd EConnect
+   ```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+2. Install PHP dependencies:
+   ```bash
+   composer install
+   ```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+3. Install frontend dependencies:
+   ```bash
+   npm install
+   ```
 
-## Laravel Sponsors
+4. Copy environment files:
+   ```bash
+   cp .env.example .env
+   ```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+5. Generate the application key:
+   ```bash
+   php artisan key:generate
+   ```
 
-### Premium Partners
+6. Configure your `.env` file:
+   - `APP_NAME`
+   - `APP_URL`
+   - database connection settings
+   - `QUEUE_CONNECTION=database` (recommended for notifications)
+   - `FIREBASE_CREDENTIALS=storage/app/firebase-auth.json`
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+7. Run migrations:
+   ```bash
+   php artisan migrate
+   ```
 
-## Contributing
+8. Build frontend assets:
+   ```bash
+   npm run build
+   ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Local Development
 
-## Code of Conduct
+Start the app and frontend tooling:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan serve
+npm run dev
+```
 
-## Security Vulnerabilities
+If you want a single command for local development, use the `dev` script in `composer.json`:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+composer run dev
+```
+
+## Firebase Push Notification Setup
+
+This project includes a Firebase push notification implementation using `kreait/laravel-firebase`.
+
+### Required Setup
+
+- Add your Firebase service account JSON file to `storage/app/firebase-auth.json`
+- Set `FIREBASE_CREDENTIALS=storage/app/firebase-auth.json` in `.env`
+- Start a queue worker:
+  ```bash
+  php artisan queue:work
+  ```
+
+### Notification Routes
+
+The application provides API endpoints for notification token management:
+
+- `POST /api/notifications/save-token`
+- `POST /api/notifications/remove-token`
+- `POST /api/notifications/remove-all`
+- `GET /api/notifications/status`
+
+### Test a Notification
+
+```bash
+php artisan notifications:test 1
+php artisan queue:work
+```
+
+## Useful Commands
+
+- `php artisan migrate` - run database migrations
+- `php artisan migrate:fresh --seed` - reset database and seed
+- `php artisan test` - execute automated tests
+- `npm run dev` - run Vite in development mode
+- `npm run build` - build frontend assets for production
+- `php artisan queue:work` - process queued jobs
+
+## Testing
+
+The project uses Pest for test execution. Run:
+
+```bash
+php artisan test
+```
+
+## Configuration Notes
+
+The main config files include:
+
+- `config/app.php`
+- `config/database.php`
+- `config/firebase.php`
+- `config/queue.php`
+- `config/pwa.php`
+
+## Project Structure
+
+- `app/` — application code, controllers, models, services, events, listeners
+- `routes/` — route definitions
+- `resources/` — views, CSS, JavaScript
+- `public/` — web entrypoint and assets
+- `database/` — migrations, factories, seeders
+- `tests/` — automated test suite
+
+## Documentation
+
+Reference project-specific documentation for implementation details:
+
+- `FIREBASE_SETUP_KREAIT.md` — Firebase notification setup summary
+- `NOTIFICATIONS_QUICK_START.md` — quick usage examples for push notifications
+- `IMPLEMENTATION_SUMMARY.md` — implementation summary and feature overview
+- `TODO.md` — planned improvements and next work items
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is open source and available under the MIT license.
