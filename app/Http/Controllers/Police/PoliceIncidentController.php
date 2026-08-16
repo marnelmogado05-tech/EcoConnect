@@ -44,8 +44,14 @@ class PoliceIncidentController extends Controller
 
         $incidents = $query->paginate(10);
 
-        // Statistics - apply same filters for accurate counts
-        $statsQuery = Incident::all();
+        // Statistics - same filters, scoped to this officer's own assignments.
+        //
+        // This previously started from Incident::all(), which loaded every incident in
+        // the system into memory and then called query-builder methods on the resulting
+        // Collection. Collection::where() with a closure filters by callback, so the
+        // search branch matched every row, and the officer scope was dropped entirely —
+        // an officer saw system-wide counts beside their own list.
+        $statsQuery = Incident::where('assigned_to', Auth::id());
 
         if ($request->filled('status')) {
             $statsQuery->where('status', $request->status);
@@ -65,11 +71,12 @@ class PoliceIncidentController extends Controller
         }
 
         $stats = [
-            'total' => $statsQuery->count(),
-            'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
+            'total' => (clone $statsQuery)->count(),
+            'assigned' => (clone $statsQuery)->where('status', 'Assigned')->count(),
             'in_progress' => (clone $statsQuery)->where('status', 'In Progress')->count(),
             'resolved' => (clone $statsQuery)->where('status', 'Resolved')->count(),
             'rejected' => (clone $statsQuery)->where('status', 'Rejected')->count(),
+            'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
         ];
 
         // Badge classes for status and priority
@@ -282,9 +289,11 @@ class PoliceIncidentController extends Controller
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function($q) use ($search) {
+                // No `location` column exists on incidents; searching it threw an
+                // unknown-column error on every filtered export and print.
                 $q->where('reference_number', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('location', 'like', "%{$search}%")
                   ->orWhereHas('user', function($q) use ($search) {
                       $q->where('fname', 'like', "%{$search}%")
                         ->orWhere('lname', 'like', "%{$search}%")

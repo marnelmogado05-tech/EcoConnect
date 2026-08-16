@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
-use App\Events\IncidentStatusChanged;
+use App\Observers\IncidentObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+#[ObservedBy([IncidentObserver::class])]
 class Incident extends Model
 {
     use HasFactory;
@@ -34,6 +36,9 @@ class Incident extends Model
         'assigned_to',
         'assigned_at',
         'date_taken_into_action',
+        'location_validated',
+        'location_is_valid',
+        'validated_locations',
     ];
 
     /**
@@ -48,6 +53,9 @@ class Incident extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'date_taken_into_action' => 'datetime',
+        'location_validated' => 'boolean',
+        'location_is_valid' => 'boolean',
+        'validated_locations' => 'array',
     ];
 
     /**
@@ -74,35 +82,6 @@ class Incident extends Model
     const PRIORITY_HIGH = 'High';
     const PRIORITY_URGENT = 'Urgent';
 
-
-    /**
-     * Boot function to generate reference number
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($incident) {
-            if (empty($incident->reference_number)) {
-                $incident->reference_number = self::generateReferenceNumber();
-            }
-        });
-
-        static::updating(function ($incident) {
-            // Check if status has changed
-            if ($incident->isDirty('status')) {
-                $oldStatus = $incident->getOriginal('status');
-                $newStatus = $incident->getAttribute('status');
-
-                // Dispatch event after the update completes
-                static::updated(function ($model) use ($oldStatus, $newStatus) {
-                    if ($model->status === $newStatus) {
-                        IncidentStatusChanged::dispatch($model, $oldStatus, $newStatus);
-                    }
-                });
-            }
-        });
-    }
 
     /**
      * Generate unique reference number

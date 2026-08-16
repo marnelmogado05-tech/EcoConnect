@@ -71,7 +71,7 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
             'Incident Time',
             'Priority',
             'Status',
-            'Location',
+            'Coordinates',
             'Media Count',
             'Assigned To',
             'Date Reported',
@@ -81,23 +81,39 @@ class IncidentsExport implements FromCollection, WithHeadings, WithMapping, With
 
     public function map($incident): array
     {
+        // incidents.user_id is ON DELETE SET NULL, so the reporter may legitimately be
+        // gone. Reading ->user->fname unguarded meant deleting a single citizen broke
+        // every export from then on.
+        $reporter = $incident->user;
+
         return [
             $incident->reference_number,
             $incident->id,
-            $incident->user->fname . ' ' . $incident->user->lname,
-            $incident->user->email,
+            $reporter?->name ?? 'Deleted account',
+            $reporter?->email ?? '—',
             $incident->incident_type,
             strip_tags($incident->description),
-            $incident->incident_date->format('Y-m-d'),
+            $incident->incident_date?->format('Y-m-d'),
             $incident->incident_time,
             $incident->priority,
             $incident->status,
-            $incident->location ?? 'N/A',
+            $this->coordinatesFor($incident),
             $incident->mediaEvidence->count(),
-            $incident->assignedTo ? $incident->assignedTo->name : 'Not Assigned',
+            $incident->assignedTo?->name ?? 'Not Assigned',
             $incident->created_at->format('Y-m-d H:i:s'),
             $incident->updated_at->format('Y-m-d H:i:s'),
         ];
+    }
+
+    /**
+     * Incidents have no `location` column — the previous value was always null. The
+     * nearest real data is the coordinates recorded against the media evidence.
+     */
+    private function coordinatesFor($incident): string
+    {
+        $located = $incident->mediaEvidence->first(fn ($media) => $media->hasLocation());
+
+        return $located ? "{$located->latitude}, {$located->longitude}" : 'N/A';
     }
 
     public function styles(Worksheet $sheet)

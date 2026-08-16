@@ -24,7 +24,7 @@ class SendNewUserNotification implements ShouldQueue
     {
         // Send notification to all staff about new registration
         $staff = User::whereIn('role', ['admin', 'police', 'bfp'])
-            ->where('status', 'active')
+            ->where('status', 'Active')
             ->get();
 
         if ($staff->isNotEmpty()) {

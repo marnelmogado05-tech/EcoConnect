@@ -33,7 +33,7 @@ class IncidentFollowupController extends Controller
             $officer = User::find($incident->assigned_to);
             if ($officer) {
                 try {
-                    Mail::queue(new IncidentFollowupMail($incident, $officer, $followup));
+                    Mail::to($officer->email)->queue(new IncidentFollowupMail($incident, $officer, $followup));
                 } catch (\Exception $e) {
                     Log::error('Failed to send followup email: ' . $e->getMessage());
                 }
@@ -76,7 +76,7 @@ class IncidentFollowupController extends Controller
             $reporter = User::find($incident->user_id);
             if ($reporter) {
                 try {
-                    Mail::queue(new IncidentFollowupMail($incident, $reporter, $followup));
+                    Mail::to($reporter->email)->queue(new IncidentFollowupMail($incident, $reporter, $followup));
                 } catch (\Exception $e) {
                     Log::error('Failed to send staff response email: ' . $e->getMessage());
                 }

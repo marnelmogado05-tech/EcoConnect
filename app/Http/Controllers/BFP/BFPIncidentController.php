@@ -45,8 +45,11 @@ class BFPIncidentController extends Controller
 
         $incidents = $query->paginate(10);
 
-        // Statistics - apply same filters for accurate counts
-        $statsQuery = Incident::all();
+        // Statistics - same filters, scoped to this officer's own assignments.
+        // See the note in PoliceIncidentController: this started from Incident::all(),
+        // which loaded the whole table into memory and then treated the Collection as a
+        // query builder, matching everything and ignoring the officer scope.
+        $statsQuery = Incident::where('assigned_to', Auth::id());
 
         if ($request->filled('status')) {
             $statsQuery->where('status', $request->status);
@@ -66,7 +69,8 @@ class BFPIncidentController extends Controller
         }
 
         $stats = [
-            'total' => $statsQuery->count(),
+            'total' => (clone $statsQuery)->count(),
+            'assigned' => (clone $statsQuery)->where('status', 'Assigned')->count(),
             'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
             'in_progress' => (clone $statsQuery)->where('status', 'In Progress')->count(),
             'resolved' => (clone $statsQuery)->where('status', 'Resolved')->count(),

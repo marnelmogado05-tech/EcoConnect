@@ -17,7 +17,7 @@ class AdminCitizenController extends Controller
     public function index(Request $request)
     {
         $filters = [
-            'status' => $request->get('status', 'active'),
+            'status' => $request->get('status', 'Active'),
             'search' => $request->get('search')
         ];
 
@@ -25,8 +25,10 @@ class AdminCitizenController extends Controller
 
         $stats = [
             'total' => User::where('role', 'user')->count(),
-            'active' => User::where('role', 'citizen')->where('status', 'active')->count(),
-            'suspended' => User::where('role', 'citizen')->where('status', 'suspended')->count(),
+            // The role is 'user'; 'citizen' exists nowhere else in the system, so both of
+            // these counters read zero permanently.
+            'active' => User::where('role', 'user')->where('status', 'Active')->count(),
+            'suspended' => User::where('role', 'user')->where('status', 'Suspended')->count(),
             'reports' => Incident::count(),
         ];
 

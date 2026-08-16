@@ -9,19 +9,43 @@ use Illuminate\Support\Facades\Log;
 
 class WebPushNotificationService
 {
-    protected $webPush;
+    protected ?WebPush $webPush = null;
 
-    public function __construct()
+    /**
+     * Build the client on demand.
+     *
+     * This used to happen in the constructor. WebPush validates the VAPID key pair as it
+     * is constructed and throws when the keys are missing or malformed, so on any
+     * environment where push had not been configured the mere act of resolving this
+     * service threw — which meant every incident status change failed, because changing a
+     * status notifies the reporter. Push being unconfigured should disable push, not
+     * block the workflow it is attached to.
+     *
+     * Reading from config rather than env() also keeps this working under config:cache,
+     * where env() returns null and push silently stopped in production.
+     */
+    protected function client(): ?WebPush
     {
-        $auth = [
+        if ($this->webPush instanceof WebPush) {
+            return $this->webPush;
+        }
+
+        $publicKey = config('firebase.vapid_public_key');
+        $privateKey = config('firebase.vapid_private_key');
+
+        if (blank($publicKey) || blank($privateKey)) {
+            Log::warning('Web push is not configured (VAPID keys absent); skipping notification.');
+
+            return null;
+        }
+
+        return $this->webPush = new WebPush([
             'VAPID' => [
                 'subject' => config('app.url'),
-                'publicKey' => env('VAPID_PUBLIC_KEY'),
-                'privateKey' => env('VAPID_PRIVATE_KEY'),
-            ]
-        ];
-
-        $this->webPush = new WebPush($auth);
+                'publicKey' => $publicKey,
+                'privateKey' => $privateKey,
+            ],
+        ]);
     }
 
     /**
@@ -29,6 +53,10 @@ class WebPushNotificationService
      */
     public function sendToUser($userId, $title, $body, $data = [])
     {
+        if (! $this->client()) {
+            return false;
+        }
+
         $tokens = FcmToken::where('user_id', $userId)
             ->where('is_active', true)
             ->get();
@@ -60,6 +88,12 @@ class WebPushNotificationService
      */
     public function sendToToken($token, $title, $body, $data = [])
     {
+        $client = $this->client();
+
+        if (! $client) {
+            return false;
+        }
+
         try {
             // Parse the subscription token (it's stored as JSON)
             $subscriptionData = is_string($token->token)
@@ -89,7 +123,7 @@ class WebPushNotificationService
             ]);
 
             // Send the notification
-            $this->webPush->sendOneNotification($subscription, $payload);
+            $client->sendOneNotification($subscription, $payload);
 
             Log::info('Web push notification sent successfully', [
                 'endpoint' => substr($subscriptionData['endpoint'], 0, 50) . '...',
@@ -129,8 +163,14 @@ class WebPushNotificationService
      */
     public function flush()
     {
+        $client = $this->client();
+
+        if (! $client) {
+            return;
+        }
+
         try {
-            foreach ($this->webPush->flush() as $report) {
+            foreach ($client->flush() as $report) {
                 $endpoint = $report->getRequest()->getUri();
                 if ($report->isSuccess()) {
                     Log::info('Web push flush success', ['endpoint' => substr($endpoint, 0, 50)]);
@@ -153,7 +193,7 @@ class WebPushNotificationService
     {
         try {
             // Verify VAPID keys are configured
-            if (!env('VAPID_PUBLIC_KEY') || !env('VAPID_PRIVATE_KEY')) {
+            if (! $this->client()) {
                 Log::error('VAPID keys not configured');
                 return false;
             }

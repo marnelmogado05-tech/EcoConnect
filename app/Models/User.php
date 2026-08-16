@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Events\UserRegistered;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -69,6 +70,23 @@ class User extends Authenticatable
                 UserRegistered::dispatch($user);
             }
         });
+    }
+
+    /**
+     * The user's display name.
+     *
+     * Names are stored as separate columns, so there is no `name` field. Notification
+     * listeners and the incident export nevertheless read $user->name, which silently
+     * resolved to null — producing "reported by Unknown" on every push notification and a
+     * blank Assigned To column in every export.
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::get(fn (): string => trim(implode(' ', array_filter([
+            $this->fname,
+            $this->lname,
+            $this->extname,
+        ]))));
     }
 
     public function incidents()

@@ -88,7 +88,8 @@ class AutoRejectPendingIncidents extends Command
                         // Queue notification if enabled (async instead of blocking)
                         if ($sendNotifications && $incident->user) {
                             try {
-                                Mail::queue(new IncidentRejectedMail($incident, $incident->user));
+                                Mail::to($incident->user->email)
+                                    ->queue(new IncidentRejectedMail($incident, $incident->user));
                             } catch (\Exception $e) {
                                 Log::error("Failed to queue auto-reject notification for incident {$incident->id}: " . $e->getMessage());
                             }
