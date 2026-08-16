@@ -3,95 +3,113 @@
 namespace App\Jobs;
 
 use App\Models\Incident;
+use App\Services\LocationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ValidateIncidentLocation implements ShouldQueue
 {
     use Queueable;
 
-    protected $incident;
-    protected $photosLatitude;
-    protected $photosLongitude;
-
     /**
-     * Create a new job instance.
+     * Municipalities the platform covers. Kept in step with MunicipalitySeeder.
      */
-    public function __construct(Incident $incident, $photosLatitude = [], $photosLongitude = [])
-    {
-        $this->incident = $incident;
-        $this->photosLatitude = $photosLatitude;
-        $this->photosLongitude = $photosLongitude;
+    public const ALLOWED_MUNICIPALITIES = [
+        'Sta Praxedes',
+        'Claveria',
+        'Sanchez Mira',
+        'Pamplona',
+        'Abulug',
+        'Ballesteros',
+        'Calayan',
+    ];
+
+    public function __construct(
+        protected Incident $incident,
+        protected array $photosLatitude = [],
+        protected array $photosLongitude = [],
+        protected array $videosLatitude = [],
+        protected array $videosLongitude = [],
+    ) {
     }
 
     /**
-     * Execute the job - validate incident location against allowed municipalities.
+     * Resolve each supplied coordinate pair and record whether any of them falls inside
+     * the covered municipalities.
      */
-    public function handle(): void
+    public function handle(LocationService $locations): void
     {
-        $allowedMunicipalities = [
-            'Sta Praxedes', 'Claveria', 'Sanchez Mira',
-            'Pamplona', 'Abulug', 'Ballesteros', 'Calayan'
-        ];
-
-        $locationIsValid = false;
         $validatedLocations = [];
+        $locationIsValid = false;
 
-        if (!empty($this->photosLatitude) && !empty($this->photosLongitude)) {
-            foreach ($this->photosLatitude as $index => $lat) {
-                $lon = $this->photosLongitude[$index] ?? null;
+        foreach ($this->coordinatePairs() as [$latitude, $longitude]) {
+            try {
+                $municipality = $locations->getMunicipalityFromCoordinates($latitude, $longitude);
+            } catch (\Throwable $e) {
+                Log::warning("Location validation failed for [{$latitude}, {$longitude}]: ".$e->getMessage());
 
-                if ($lat && $lon) {
-                    try {
-                        $response = Http::withHeaders([
-                            'User-Agent' => 'EcoConnect/1.0',
-                        ])->timeout(5)
-                        ->connectTimeout(3)
-                        ->get('https://nominatim.openstreetmap.org/reverse', [
-                            'format' => 'jsonv2',
-                            'lat' => $lat,
-                            'lon' => $lon,
-                            'addressdetails' => 1,
-                        ]);
-
-                        if ($response->successful()) {
-                            $address = $response->json('address');
-                            $municipality = $address['city']
-                                ?? $address['town']
-                                ?? $address['municipality']
-                                ?? $address['county']
-                                ?? null;
-
-                            $isInAllowedArea = $municipality &&
-                                in_array(trim($municipality), $allowedMunicipalities);
-
-                            $validatedLocations[] = [
-                                'latitude' => $lat,
-                                'longitude' => $lon,
-                                'municipality' => $municipality,
-                                'is_valid' => $isInAllowedArea,
-                            ];
-
-                            if ($isInAllowedArea) {
-                                $locationIsValid = true;
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        Log::warning("Location validation failed for coordinates [$lat, $lon]: " . $e->getMessage());
-                    }
-                }
+                continue;
             }
+
+            $isInAllowedArea = $municipality !== null
+                && in_array(trim($municipality), self::ALLOWED_MUNICIPALITIES, true);
+
+            $validatedLocations[] = [
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'municipality' => $municipality,
+                'is_valid' => $isInAllowedArea,
+            ];
+
+            $locationIsValid = $locationIsValid || $isInAllowedArea;
         }
 
-        // Update incident with validation results
+        // These three columns were absent from Incident::$fillable, so this update
+        // discarded every one of them without raising anything. The job logged success
+        // and wrote nothing.
         $this->incident->update([
             'location_validated' => true,
             'location_is_valid' => $locationIsValid,
-            'validated_locations' => json_encode($validatedLocations),
+            'validated_locations' => $validatedLocations,
         ]);
 
-        Log::info("Incident #{$this->incident->id} location validation complete. Valid: {$locationIsValid}");
+        Log::info("Incident #{$this->incident->id} location validation complete.", [
+            'coordinates_checked' => count($validatedLocations),
+            'is_valid' => $locationIsValid,
+        ]);
+    }
+
+    /**
+     * Photo and video coordinates, paired up and filtered to usable values.
+     *
+     * The video arrays were previously dropped on the floor: the controller passed five
+     * arguments to a three-argument constructor, so a report backed only by video was
+     * never location-checked at all.
+     *
+     * @return list<array{0: float, 1: float}>
+     */
+    private function coordinatePairs(): array
+    {
+        $pairs = [];
+
+        $sources = [
+            [$this->photosLatitude, $this->photosLongitude],
+            [$this->videosLatitude, $this->videosLongitude],
+        ];
+
+        foreach ($sources as [$latitudes, $longitudes]) {
+            foreach ($latitudes as $index => $latitude) {
+                $longitude = $longitudes[$index] ?? null;
+
+                if (! is_numeric($latitude) || ! is_numeric($longitude)) {
+                    continue;
+                }
+
+                $pairs[] = [(float) $latitude, (float) $longitude];
+            }
+        }
+
+        return $pairs;
     }
 }

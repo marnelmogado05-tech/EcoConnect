@@ -56,8 +56,8 @@ class AdminbfpController extends Controller
         // Get overall statistics for bfp
         $stats = [
             'total' => User::where('role', 'bfp')->count(),
-            'active' => User::where('role', 'bfp')->where('status', 'active')->count(),
-            'suspended' => User::where('role', 'bfp')->where('status', 'suspended')->count(),
+            'active' => User::where('role', 'bfp')->where('status', 'Active')->count(),
+            'suspended' => User::where('role', 'bfp')->where('status', 'Suspended')->count(),
             'assigned_reports' => \App\Models\Incident::whereNotNull('assigned_to')
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'bfp');
@@ -164,7 +164,7 @@ class AdminbfpController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'bfp',
-            'status' => 'active',
+            'status' => 'Active',
         ]);
 
         return redirect()->route('admin.bfp')->with('success', "bfp Officer added successfully.");
@@ -185,7 +185,7 @@ class AdminbfpController extends Controller
             'phone' => 'required|string|max:20',
             'email' => 'required|email|unique:users,email,' . $id,
             'municipality_id' => 'required|exists:municipalities,id',
-            'status' => 'required|in:active,suspended',
+            'status' => 'required|in:Active,Suspended',
             'id_card' => 'nullable|image|mimes:jpeg,jpg,png|max:5120',
         ]);
 

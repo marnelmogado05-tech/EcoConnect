@@ -60,10 +60,12 @@ class TrackIncidentController extends Controller
             return redirect()->route('track.index')->with('error', 'Incident not found.');
         }
 
-        // For public users, store follow-up with NULL user_id
+        // Public follow-ups have no user; auth()->id() is null for anonymous visitors.
+        // This previously read auth()->id — the property, not the method — which is
+        // undefined on the auth manager and wrote null into a NOT NULL foreign key.
         $followup = IncidentFollowup::create([
             'incident_id' => $incident->id,
-            'user_id' => auth()->id,
+            'user_id' => auth()->id(),
             'follow_up_text' => $request->follow_up_text,
             'follow_up_type' => 'User Update'
         ]);
@@ -73,7 +75,7 @@ class TrackIncidentController extends Controller
             $officer = User::find($incident->assigned_to);
             if ($officer) {
                 try {
-                    Mail::queue(new IncidentFollowupMail($incident, $officer, $followup));
+                    Mail::to($officer->email)->queue(new IncidentFollowupMail($incident, $officer, $followup));
                 } catch (\Exception $e) {
                     // Log error but don't fail the request
                     Log::error('Failed to send followup email: ' . $e->getMessage());

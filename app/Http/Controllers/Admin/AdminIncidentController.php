@@ -24,8 +24,10 @@ class AdminIncidentController extends Controller
 {
     public function index(Request $request)
     {
-        $policeUsers = User::where('role', 'police')
-                            ->orWhere('role', 'bfp')
+        // whereIn, not where()->orWhere(): the ungrouped version parsed as
+        // (role = 'police') OR (role = 'bfp' AND status = 'Active'), which put inactive
+        // police officers into the assignment dropdown.
+        $policeUsers = User::whereIn('role', ['police', 'bfp'])
                             ->where('status', 'Active')
                             ->get();
 
@@ -318,9 +320,11 @@ class AdminIncidentController extends Controller
 
         try {
 
+            // The ungrouped form was (id = X AND role = 'police') OR role = 'bfp', so this
+            // could return an arbitrary BFP user unrelated to the requested id — and then
+            // email the assignment to them.
             $assignedOfficer = User::where('id', $validated['assigned_to'])
-                              ->where('role', 'police')
-                              ->orWhere('role', 'bfp')
+                              ->whereIn('role', ['police', 'bfp'])
                               ->firstOrFail();
 
             // Update the incident
@@ -441,9 +445,11 @@ class AdminIncidentController extends Controller
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function($q) use ($search) {
+                // No `location` column exists on incidents; searching it threw an
+                // unknown-column error on every filtered export and print.
                 $q->where('reference_number', 'like', "%{$search}%")
+                  ->orWhere('title', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('location', 'like', "%{$search}%")
                   ->orWhereHas('user', function($q) use ($search) {
                       $q->where('fname', 'like', "%{$search}%")
                         ->orWhere('lname', 'like', "%{$search}%")

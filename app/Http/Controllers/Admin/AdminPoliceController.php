@@ -53,8 +53,8 @@ class AdminPoliceController extends Controller
         // Get overall statistics for police
         $stats = [
             'total' => User::where('role', 'police')->count(),
-            'active' => User::where('role', 'police')->where('status', 'active')->count(),
-            'suspended' => User::where('role', 'police')->where('status', 'suspended')->count(),
+            'active' => User::where('role', 'police')->where('status', 'Active')->count(),
+            'suspended' => User::where('role', 'police')->where('status', 'Suspended')->count(),
             'assigned_reports' => \App\Models\Incident::whereNotNull('assigned_to')
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'police');
@@ -161,7 +161,7 @@ class AdminPoliceController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'police',
-            'status' => 'active',
+            'status' => 'Active',
         ]);
 
         return redirect()->route('admin.police')->with('success', "Police Officer added successfully.");
@@ -182,7 +182,7 @@ class AdminPoliceController extends Controller
             'phone' => 'required|string|max:20',
             'email' => 'required|email|unique:users,email,' . $id,
             'municipality_id' => 'required|exists:municipalities,id',
-            'status' => 'required|in:active,suspended',
+            'status' => 'required|in:Active,Suspended',
             'id_card' => 'nullable|image|mimes:jpeg,jpg,png|max:5120',
         ]);
 

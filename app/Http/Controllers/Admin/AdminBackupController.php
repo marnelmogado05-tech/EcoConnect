@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\CreateDatabaseBackup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -72,23 +73,14 @@ class AdminBackupController extends Controller
 
     public function create()
     {
-        try {
-            // Run in background to avoid timeout
-            $command = 'php ' . base_path('artisan') . ' backup:run --only-db > /dev/null 2>&1 &';
+        // Queued rather than shelled out, so it runs the same way on every platform and
+        // the retention prune only happens once a backup has actually succeeded.
+        CreateDatabaseBackup::dispatch();
 
-            if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-                // Windows
-                pclose(popen('start /B php ' . base_path('artisan') . ' backup:run --only-db', 'r'));
-            }
-
-            // Automatically clean up backups older than 2 days after creating new one
-            $this->cleanupOldBackups(2);
-
-            return back()->with('success', 'Backup process started in background! Backups older than 2 days cleaned up automatically.');
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Backup failed: ' . $e->getMessage());
-        }
+        return back()->with(
+            'success',
+            'Backup queued. It will appear in the list once the worker finishes writing it.'
+        );
     }
 
     public function download(string $filename): StreamedResponse
@@ -146,28 +138,4 @@ class AdminBackupController extends Controller
         return $this->formatBytes($totalSpace - $freeSpace);
     }
 
-    protected function cleanupOldBackups(int $daysOld = 2)
-    {
-        try {
-            $backupDestination = BackupDestination::create('local', config('backup.backup.name'));
-            $backups = collect($backupDestination->backups());
-
-            $cutoffDate = Carbon::now()->subDays($daysOld);
-
-            $backupsToDelete = $backups->filter(function (Backup $backup) use ($cutoffDate) {
-                return $backup->date()->lt($cutoffDate);
-            });
-
-            foreach ($backupsToDelete as $backup) {
-                $path = config('backup.backup.name') . '/' . basename($backup->path());
-                if (Storage::disk('local')->exists($path)) {
-                    Storage::disk('local')->delete($path);
-                }
-            }
-
-        } catch (\Exception $e) {
-            // Log the error but don't throw it to avoid breaking the backup creation
-            \Log::error('Failed to cleanup old backups: ' . $e->getMessage());
-        }
-    }
 }

@@ -30,9 +30,12 @@ class UserIncidentController extends Controller
         // Increase execution time limit for this operation
         set_time_limit(300);
 
-        // check if the user is suspended
+        // Check if the user is suspended. This compared against 'suspended' while the
+        // admin panel writes 'Suspended' — a strict PHP comparison, so unlike the database
+        // lookups it was never rescued by a case-insensitive collation. Suspended accounts
+        // could file reports as normal.
         $user = Auth::user();
-        if ($user->status === 'suspended') {
+        if ($user->status === 'Suspended') {
             return response()->json([
                 'error' => 'Your account is suspended. You cannot report new incidents.'
             ], 403);
@@ -292,6 +295,23 @@ class UserIncidentController extends Controller
         }
     }
 
+
+    /**
+     * Show a single incident belonging to the signed-in reporter.
+     *
+     * Notification emails link here. Rather than duplicating the incident detail markup
+     * into a second template, this sends the reporter to their own list filtered to the
+     * one reference number, which guarantees the incident is on the first page and reuses
+     * the detail modal already rendered there.
+     *
+     * The ownership check is deliberately explicit for now; M2 replaces it with a policy.
+     */
+    public function show(Incident $incident)
+    {
+        abort_unless($incident->user_id === Auth::id(), 403);
+
+        return redirect()->route('incidents', ['search' => $incident->reference_number]);
+    }
 
     public function index(Request $request)
     {

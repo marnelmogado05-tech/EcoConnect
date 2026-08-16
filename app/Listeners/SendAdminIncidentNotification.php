@@ -31,13 +31,13 @@ class SendAdminIncidentNotification implements ShouldQueue
         Log::info('SendAdminIncidentNotification: New incident reported', [
             'incident_id' => $incident->id,
             'incident_type' => $incident->incident_type,
-            'reporter' => $incident->user?->name ?? 'Unknown',
+            'reporter' => $incident->user?->name ?: 'Unknown',
         ]);
 
         try {
             // Get all admins, police, and BFP staff who should be notified
             $admins = User::whereIn('role', ['admin', 'police', 'bfp'])
-                ->where('status', 'active')
+                ->where('status', 'Active')
                 ->get();
 
             if ($admins->isEmpty()) {
@@ -45,10 +45,12 @@ class SendAdminIncidentNotification implements ShouldQueue
                 return;
             }
 
+            // Incidents have no `location` column, so the old message always read
+            // "reported in Unknown Location by Unknown". The reference number is the
+            // identifier staff actually work from.
             $title = '🚨 New Incident Reported';
-            $location = $incident->location ?? 'Unknown Location';
-            $reporter = $incident->user?->name ?? 'Unknown';
-            $body = "{$incident->incident_type} reported in {$location} by {$reporter}";
+            $reporter = $incident->user?->name ?: 'an anonymous reporter';
+            $body = "{$incident->incident_type} reported by {$reporter} ({$incident->reference_number})";
             $data = [
                 'incident_id' => $incident->id,
                 'incident_type' => $incident->incident_type,

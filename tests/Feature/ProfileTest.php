@@ -1,6 +1,27 @@
 <?php
 
+use App\Models\Barangay;
 use App\Models\User;
+
+/**
+ * The profile form posts discrete name parts plus a municipality and barangay; there is
+ * no single `name` field. These helpers keep the required payload in one place.
+ */
+function profilePayload(array $overrides = []): array
+{
+    $barangay = Barangay::factory()->create();
+
+    return array_merge([
+        'fname' => 'Test',
+        'mname' => null,
+        'lname' => 'User',
+        'extname' => null,
+        'phone' => '09171234567',
+        'email' => 'test@example.com',
+        'municipality_id' => $barangay->municipality_id,
+        'barangay_id' => $barangay->id,
+    ], $overrides);
+}
 
 test('profile page is displayed', function () {
     $user = User::factory()->create();
@@ -17,10 +38,7 @@ test('profile information can be updated', function () {
 
     $response = $this
         ->actingAs($user)
-        ->patch('/profile', [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        ->patch('/profile', profilePayload());
 
     $response
         ->assertSessionHasNoErrors()
@@ -28,7 +46,8 @@ test('profile information can be updated', function () {
 
     $user->refresh();
 
-    $this->assertSame('Test User', $user->name);
+    $this->assertSame('Test', $user->fname);
+    $this->assertSame('User', $user->lname);
     $this->assertSame('test@example.com', $user->email);
     $this->assertNull($user->email_verified_at);
 });
@@ -38,10 +57,7 @@ test('email verification status is unchanged when the email address is unchanged
 
     $response = $this
         ->actingAs($user)
-        ->patch('/profile', [
-            'name' => 'Test User',
-            'email' => $user->email,
-        ]);
+        ->patch('/profile', profilePayload(['email' => $user->email]));
 
     $response
         ->assertSessionHasNoErrors()
