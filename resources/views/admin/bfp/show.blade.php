@@ -61,11 +61,16 @@
                                 </div> --}}
 
                                 <div class="mb-3 id-card-preview">
-                                    <img src="data:image/jpeg;base64,{{ base64_encode($bfp->id_card) }}"
-                                        alt="ID Card"
-                                        class="border rounded id-card-image img-fluid"
-                                        style="max-height: 200px; cursor: pointer;"
-                                        onclick="viewIdCard('{{ base64_encode($bfp->id_card) }}')">
+                                    @if($bfp->id_card_path)
+                                        <a href="{{ route('users.id-card', $bfp) }}" target="_blank" rel="noopener">
+                                            <img src="{{ route('users.id-card', $bfp) }}"
+                                                alt="ID Card"
+                                                class="border rounded id-card-image img-fluid"
+                                                style="max-height: 200px; cursor: pointer;">
+                                        </a>
+                                    @else
+                                        <p class="mb-0 text-muted">No ID card on file.</p>
+                                    @endif
                                 </div>
                             </div>
                         </div>

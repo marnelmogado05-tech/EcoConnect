@@ -444,10 +444,10 @@
                                                             @foreach($images as $image)
                                                                 <div class="col-12 col-sm-6 col-md-4">
                                                                     <div class="shadow-sm card" style="border-radius: 10px; overflow: hidden;">
-                                                                        <img src="{{ asset('storage/' . $image->file_path) }}"
+                                                                        <img src="{{ $image->url }}"
                                                                             class="card-img-top media-thumbnail"
                                                                             alt="Evidence photo"
-                                                                            onclick="previewImage('{{ asset('storage/' . $image->file_path) }}', '{{ $image->file_name }}')"
+                                                                            onclick="previewImage('{{ $image->url }}', '{{ $image->file_name }}')"
                                                                             style="height: 200px; object-fit: cover;">
                                                                         <div class="p-3 card-body">
                                                                             <small class="mb-2 text-muted d-block">
@@ -458,7 +458,7 @@
                                                                                     <i class="fas fa-map-marker-alt me-1"></i>{{ $image->address }}
                                                                                 </small>
                                                                             @endif
-                                                                            <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ asset('storage/' . $image->file_path) }}', '{{ $image->file_name }}')" style="border-radius: 20px;">
+                                                                            <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ $image->url }}', '{{ $image->file_name }}')" style="border-radius: 20px;">
                                                                                 <i class="fas fa-download me-1"></i>Download
                                                                             </button>
                                                                         </div>
@@ -480,7 +480,7 @@
                                                                     <div class="shadow-sm card" style="border-radius: 10px; overflow: hidden;">
                                                                         <div class="video-container">
                                                                             <video controls class="w-100" style="max-height: 250px; border-radius: 10px 10px 0 0;">
-                                                                                <source src="{{ asset('storage/' . $video->file_path) }}" type="{{ $video->mime_type }}">
+                                                                                <source src="{{ $video->url }}" type="{{ $video->mime_type }}">
                                                                                 Your browser does not support the video tag.
                                                                             </video>
                                                                         </div>
@@ -493,7 +493,7 @@
                                                                                     <i class="fas fa-map-marker-alt me-1"></i>{{ $video->address }}
                                                                                 </small>
                                                                             @endif
-                                                                            <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ asset('storage/' . $video->file_path) }}', '{{ $video->file_name }}')" style="border-radius: 20px;">
+                                                                            <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ $video->url }}', '{{ $video->file_name }}')" style="border-radius: 20px;">
                                                                                 <i class="fas fa-download me-1"></i>Download
                                                                             </button>
                                                                         </div>

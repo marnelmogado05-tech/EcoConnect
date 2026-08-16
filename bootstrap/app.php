@@ -3,10 +3,7 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\AdminMiddleware;
-use App\Http\Middleware\PoliceMiddleware;
-use App\Http\Middleware\BFPMiddleware;
-use App\Http\Middleware\UserMiddleware;
+use App\Http\Middleware\EnsureUserHasRole;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,11 +12,16 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // A single role middleware, parameterised: 'role:police,bfp' admits either.
         $middleware->alias([
-            'admin' => AdminMiddleware::class,
-            'police' => PoliceMiddleware::class,
-            'bfp' => BFPMiddleware::class,
-            'user' => UserMiddleware::class,
+            'role' => EnsureUserHasRole::class,
+
+            // Retained so existing route definitions keep working; each is the
+            // parameterised middleware bound to one role.
+            'admin' => EnsureUserHasRole::class.':admin',
+            'police' => EnsureUserHasRole::class.':police',
+            'bfp' => EnsureUserHasRole::class.':bfp',
+            'user' => EnsureUserHasRole::class.':user',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

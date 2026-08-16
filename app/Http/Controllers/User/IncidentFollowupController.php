@@ -19,6 +19,10 @@ class IncidentFollowupController extends Controller
      */
     public function store(Request $request, Incident $incident)
     {
+        // Previously this route sat behind 'auth' alone, so any signed-in citizen could
+        // append to any incident by changing the id in the URL.
+        $this->authorize('addFollowup', $incident);
+
         $request->validate(['follow_up_text' => 'required|string|max:1000']);
 
         $followup = IncidentFollowup::create([
@@ -49,6 +53,10 @@ class IncidentFollowupController extends Controller
      */
     public function show(Incident $incident)
     {
+        // This returned any incident's entire follow-up thread to any authenticated
+        // caller — the reporter's own account of an environmental crime included.
+        $this->authorize('view', $incident);
+
         $followups = $incident->followups()->with('user')->get();
 
         return response()->json([
@@ -62,6 +70,10 @@ class IncidentFollowupController extends Controller
      */
     public function respond(Request $request, Incident $incident)
     {
+        // "Staff Response" carries authority. Restricted to admins and the assigned
+        // responder; previously any signed-in citizen could author one on any incident.
+        $this->authorize('respond', $incident);
+
         $request->validate(['follow_up_text' => 'required|string|max:1000']);
 
         $followup = IncidentFollowup::create([

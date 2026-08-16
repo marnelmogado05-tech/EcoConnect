@@ -6,6 +6,8 @@ use App\Http\Controllers\User\UserDashboardController;
 use App\Http\Controllers\User\TrackIncidentController;
 use App\Http\Controllers\StorageController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\IdCardController;
+use App\Http\Controllers\MediaEvidenceController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\User\IncidentFollowupController;
@@ -16,11 +18,16 @@ Route::get('/', function () {
 
 Route::get('/otp-verify', [RegisteredUserController::class, 'showOtpForm'])->name('otp.verify');
 
-Route::post('/register', [RegisteredUserController::class, 'store'])->name('register');
+// Throttled: a six-digit code is a one-million guess space, and these routes previously
+// accepted unlimited attempts. The per-attempt counter in the controller caps a single
+// code; this caps how fast an attacker can cycle through fresh ones.
+Route::post('/otp-verify', [RegisteredUserController::class, 'verifyOtp'])
+    ->middleware('throttle:10,1')
+    ->name('otp.verify.submit');
 
-Route::post('/otp-verify', [RegisteredUserController::class, 'verifyOtp'])->name('otp.verify.submit');
-
-Route::post('/otp-resend', [RegisteredUserController::class, 'resendOtp'])->name('otp.resend');
+Route::post('/otp-resend', [RegisteredUserController::class, 'resendOtp'])
+    ->middleware('throttle:3,1')
+    ->name('otp.resend');
 
 Route::get('/hotspots', function () {
     return view('hotspots');
@@ -34,11 +41,10 @@ Route::get('/privacy', function () {
     return view('privacy');
 })->name('privacy');
 
-Route::post('/register', [RegisteredUserController::class, 'store'])->name('register');
-
-Route::post('/otp-verify', [RegisteredUserController::class, 'verifyOtp'])->name('otp.verify.submit');
-
-Route::post('/otp-resend', [RegisteredUserController::class, 'resendOtp'])->name('otp.resend');
+// The register, otp-verify and otp-resend routes were each declared a second time here.
+// Laravel keeps the last definition for a given method and URI, so these silently
+// replaced the ones above — which would have discarded the throttling added to them,
+// and shadowed the guest-protected POST /register declared in routes/auth.php.
 
 Route::get('/api/municipalities/{municipality}/barangays', function ($municipalityId) {
     $barangays = \App\Models\Barangay::where('municipality_id', $municipalityId)->get();
@@ -53,8 +59,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('/profile/id-card/download', [ProfileController::class, 'downloadIdCard'])->name('profile.id-card.download');
-    Route::get('/profile/id-card/view', [ProfileController::class, 'viewIdCard'])->name('profile.id-card.view');
+    // ID cards live on the private disk and are streamed only after UserPolicy
+    // authorises the viewer, so there is no public URL that reaches one.
+    Route::get('/profile/id-card/download', [IdCardController::class, 'download'])->name('profile.id-card.download');
+    Route::get('/profile/id-card/view', [IdCardController::class, 'show'])->name('profile.id-card.view');
+    Route::get('/users/{user}/id-card', [IdCardController::class, 'show'])->name('users.id-card');
+
+    // Evidence is streamed from the private disk after IncidentPolicy::viewMedia.
+    Route::get('/media/{media}', [MediaEvidenceController::class, 'show'])->name('media.show');
 });
 
 require __DIR__.'/auth.php';

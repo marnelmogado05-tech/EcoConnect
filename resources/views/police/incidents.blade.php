@@ -503,10 +503,10 @@
                                                                     @foreach($images as $image)
                                                                         <div class="col-md-4 col-sm-6">
                                                                             <div class="card">
-                                                                                <img src="{{ asset('storage/' . $image->file_path) }}"
+                                                                                <img src="{{ $image->url }}"
                                                                                     class="card-img-top media-thumbnail"
                                                                                     alt="Evidence photo"
-                                                                                    onclick="previewImage('{{ asset('storage/' . $image->file_path) }}', '{{ $image->file_name }}')">
+                                                                                    onclick="previewImage('{{ $image->url }}', '{{ $image->file_name }}')">
                                                                                 <div class="p-2 card-body">
                                                                                     <small class="text-muted">
                                                                                         <i class="fas fa-file-image"></i> {{ $image->file_name }}
@@ -533,7 +533,7 @@
                                                                             <div class="card">
                                                                                 <div class="video-container">
                                                                                     <video controls class="w-100" style="max-height: 300px;">
-                                                                                        <source src="{{ asset('storage/' . $video->file_path) }}" type="{{ $video->mime_type }}">
+                                                                                        <source src="{{ $video->url }}" type="{{ $video->mime_type }}">
                                                                                         Your browser does not support the video tag.
                                                                                     </video>
                                                                                 </div>
@@ -547,7 +547,7 @@
                                                                                         </small>
                                                                                     @endif
                                                                                     <div class="mt-2">
-                                                                                        <button class="btn btn-sm btn-outline-primary" onclick="downloadFile('{{ asset('storage/' . $video->file_path) }}', '{{ $video->file_name }}')">
+                                                                                        <button class="btn btn-sm btn-outline-primary" onclick="downloadFile('{{ $video->url }}', '{{ $video->file_name }}')">
                                                                                             <i class="fas fa-download"></i> Download
                                                                                         </button>
                                                                                     </div>

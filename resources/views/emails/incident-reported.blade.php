@@ -207,7 +207,9 @@
                     <div class="media-grid">
                         @foreach($images as $image)
                         <div class="media-item">
-                            <img src="{{ $message->embed(asset('storage/' . $image->file_path)) }}" 
+                            {{-- embed() takes a filesystem path, not a URL; the evidence
+                                 disk is private, so there is no URL to give it anyway. --}}
+                            <img src="{{ $message->embed($image->storage_path) }}"
                                  alt="Evidence photo" 
                                  class="media-image">
                             <div class="media-info">

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class MediaEvidence extends Model
 {
@@ -123,23 +124,32 @@ class MediaEvidence extends Model
     }
 
     /**
-     * Get the file URL for web access.
+     * URL for displaying this file.
+     *
+     * Points at a route guarded by IncidentPolicy::viewMedia rather than at a public
+     * asset path. Evidence lives on the private disk, so asset('storage/...') no longer
+     * resolves to anything — which is the point.
      */
-    protected function fileUrl(): Attribute
+    protected function url(): Attribute
     {
-        return Attribute::make(
-            get: fn () => asset('storage/' . $this->file_path),
-        );
+        return Attribute::get(fn (): string => route('media.show', $this));
     }
 
     /**
-     * Get the storage path for the file.
+     * Retained under its old name so existing callers keep working.
+     */
+    protected function fileUrl(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->url);
+    }
+
+    /**
+     * Absolute path on disk, for the rare case that needs the bytes locally
+     * (image dimensions, embedding into an email).
      */
     protected function storagePath(): Attribute
     {
-        return Attribute::make(
-            get: fn () => storage_path('app/public/' . $this->file_path),
-        );
+        return Attribute::get(fn (): string => Storage::disk('local')->path($this->file_path));
     }
 
     /**

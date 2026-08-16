@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\CreateDatabaseBackup;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\BackupDestination\Backup;
 use Spatie\Backup\BackupDestination\BackupDestination;
@@ -54,7 +55,9 @@ class AdminBackupController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Backup Error: ' . $e->getMessage());
+            Log::error('Failed to list backups: '.$e->getMessage());
+
+            return redirect()->back()->with('error', 'The backup list could not be loaded.');
         }
     }
 
@@ -85,30 +88,43 @@ class AdminBackupController extends Controller
 
     public function download(string $filename): StreamedResponse
     {
-        $path = config('backup.backup.name').'/'.$filename;
-
-        if (!Storage::disk('local')->exists($path)) {
-            abort(404, 'The backup file does not exist.');
-        }
-
-        return Storage::disk('local')->download($path);
+        return Storage::disk('local')->download($this->resolveBackupPath($filename));
     }
 
     public function delete(string $filename)
     {
-        $path = config('backup.backup.name').'/'.$filename;
-
-        if (!Storage::disk('local')->exists($path)) {
-            abort(404, 'The backup file does not exist.');
-        }
+        $path = $this->resolveBackupPath($filename);
 
         try {
             Storage::disk('local')->delete($path);
-            return back()->with('success', 'Backup deleted successfully');
 
+            return back()->with('success', 'Backup deleted successfully');
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to delete backup: ' . $e->getMessage());
+            Log::error('Failed to delete backup: '.$e->getMessage());
+
+            return back()->with('error', 'The backup could not be deleted.');
         }
+    }
+
+    /**
+     * Turn a user-supplied filename into a path, or fail.
+     *
+     * The name arrives straight off the URL and used to be concatenated into a storage
+     * path unchecked. Rather than trying to sanitise traversal sequences, this matches
+     * the input against the backups that actually exist — anything not on that list
+     * simply is not a backup.
+     */
+    private function resolveBackupPath(string $filename): string
+    {
+        $destination = BackupDestination::create('local', config('backup.backup.name'));
+
+        $known = collect($destination->backups())
+            ->map(fn (Backup $backup) => basename($backup->path()))
+            ->contains($filename);
+
+        abort_unless($known, 404, 'The backup file does not exist.');
+
+        return config('backup.backup.name').'/'.$filename;
     }
 
     public function cleanup()
@@ -121,7 +137,9 @@ class AdminBackupController extends Controller
                 ->with('output', Artisan::output());
 
         } catch (\Exception $e) {
-            return back()->with('error', 'Cleanup failed: ' . $e->getMessage());
+            Log::error('Backup cleanup failed: '.$e->getMessage());
+
+            return back()->with('error', 'The cleanup could not be completed.');
         }
     }
 

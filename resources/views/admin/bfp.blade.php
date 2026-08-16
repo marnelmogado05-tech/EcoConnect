@@ -373,11 +373,11 @@
                                                             <label class="form-label">Update ID Card (Optional)</label>
 
                                                             <!-- Current ID Card Preview -->
-                                                            @if($officer->id_card)
+                                                            @if($officer->id_card_path)
                                                             <div class="mb-3">
                                                                 <label class="form-label text-muted">Current ID Card:</label>
                                                                 <div class="d-flex align-items-center">
-                                                                    <img src="{{ asset('storage/' . $officer->id_card) }}" alt="Current ID Card" class="rounded me-3" style="max-width: 100px; max-height: 80px;">
+                                                                    <img src="{{ route('users.id-card', $officer) }}" alt="Current ID Card" class="rounded me-3" style="max-width: 100px; max-height: 80px;">
                                                                     <span class="text-muted small">Current ID card</span>
                                                                 </div>
                                                             </div>

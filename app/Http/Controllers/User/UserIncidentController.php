@@ -144,11 +144,13 @@ class UserIncidentController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Incident reporting error: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
+            Log::error('Incident reporting error: '.$e->getMessage(), ['exception' => $e]);
 
+            // The message is logged, not returned: exception text routinely carries SQL
+            // fragments, column names and absolute paths, and the reporter can act on
+            // none of it.
             return response()->json([
-                'error' => 'Failed to report incident. Please try again. Error: ' . $e->getMessage()
+                'error' => 'We could not submit your report. Please try again.'
             ], 500);
         }
     }
@@ -193,7 +195,9 @@ class UserIncidentController extends Controller
                 $filePath = 'incidents/media/' . $filename;
 
                 // Store the file using Laravel's storage
-                Storage::disk('public')->put($filePath, $imageData);
+                // Private disk: evidence is legal material with coordinates attached and
+                // must not be reachable by URL without an authorisation check.
+                Storage::disk('local')->put($filePath, $imageData);
 
                 // Get location data for this photo
                 $latitude = isset($validated['photos_latitude'][$index]) ?
@@ -207,7 +211,7 @@ class UserIncidentController extends Controller
                     'file_path' => $filePath,
                     'file_name' => $filename,
                     'mime_type' => 'image/' . $imageType,
-                    'file_size' => Storage::disk('public')->size($filePath),
+                    'file_size' => Storage::disk('local')->size($filePath),
                     'latitude' => $latitude,
                     'longitude' => $longitude,
                 ]);
@@ -239,7 +243,7 @@ class UserIncidentController extends Controller
                 $filePath = 'incidents/media/' . $filename;
 
                 // Store the file using Laravel's storage
-                Storage::disk('public')->put($filePath, $videoBinary);
+                Storage::disk('local')->put($filePath, $videoBinary);
 
                 // Get location data for this video
                 $latitude = isset($validated['videos_latitude'][$index]) ?
@@ -253,7 +257,7 @@ class UserIncidentController extends Controller
                     'file_path' => $filePath,
                     'file_name' => $filename,
                     'mime_type' => 'video/' . $videoType,
-                    'file_size' => Storage::disk('public')->size($filePath),
+                    'file_size' => Storage::disk('local')->size($filePath),
                     'latitude' => $latitude,
                     'longitude' => $longitude,
                 ]);
@@ -276,12 +280,12 @@ class UserIncidentController extends Controller
             $filename = time() . '_' . Str::random(10) . '_' . $file->getClientOriginalName();
 
             // Store in public disk
-            $publicPath = $file->storeAs('incidents/media', $filename, 'public');
+            $storedPath = $file->storeAs('incidents/media', $filename, 'local');
 
             // Create media evidence record
             MediaEvidence::create([
                 'incident_id' => $incidentId,
-                'file_path' => $publicPath, // or you can use $mediaPath depending on your app
+                'file_path' => $storedPath,
                 'file_name' => $filename,
                 'mime_type' => $file->getMimeType(),
                 'file_size' => $file->getSize(),
@@ -304,11 +308,10 @@ class UserIncidentController extends Controller
      * one reference number, which guarantees the incident is on the first page and reuses
      * the detail modal already rendered there.
      *
-     * The ownership check is deliberately explicit for now; M2 replaces it with a policy.
      */
     public function show(Incident $incident)
     {
-        abort_unless($incident->user_id === Auth::id(), 403);
+        $this->authorize('view', $incident);
 
         return redirect()->route('incidents', ['search' => $incident->reference_number]);
     }

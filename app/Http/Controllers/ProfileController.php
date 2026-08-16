@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Support\IdCardStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -58,17 +59,15 @@ class ProfileController extends Controller
         ]);
 
         try {
-            // Handle ID card upload (store as BLOB)
             if ($request->hasFile('id_card')) {
-                // Get the file contents and store as BLOB
-                $idCardFile = $request->file('id_card');
-                $idCardData = file_get_contents($idCardFile->getRealPath());
+                $previousPath = $user->id_card_path;
 
-                // Update the id_card field directly
-                $user->id_card = $idCardData;
+                $user->id_card_path = IdCardStorage::store($request->file('id_card'));
+
+                // Only discard the old image once the replacement is safely written.
+                IdCardStorage::delete($previousPath);
             }
 
-            // Update other fields individually to avoid BLOB issues
             $user->fname = $validated['fname'];
             $user->mname = $validated['mname'];
             $user->lname = $validated['lname'];
@@ -86,50 +85,12 @@ class ProfileController extends Controller
 
             return Redirect::route('profile.edit')->with('status', 'profile-updated');
         } catch (\Exception $e) {
-            \Log::error('Profile update error: ' . $e->getMessage());
-            return Redirect::route('profile.edit')->with('error', 'Failed to update profile: ' . $e->getMessage());
-        }
-    }
+            // The exception text is logged, not shown: it can carry query fragments and
+            // file paths, and the user can do nothing with it either way.
+            Log::error('Profile update error: '.$e->getMessage());
 
-    /**
-     * Download the user's ID card.
-     */
-    public function downloadIdCard(Request $request)
-    {
-        $user = $request->user();
-
-        if (!$user->id_card) {
-            return back()->with('error', 'No ID card found.');
-        }
-
-        try {
-            // Convert BLOB to image response
-            return response($user->id_card)
-                ->header('Content-Type', 'image/jpeg')
-                ->header('Content-Disposition', 'attachment; filename="id-card-' . $user->fname . '-' . $user->lname . '.jpg"');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Failed to download ID card.');
-        }
-    }
-
-    /**
-     * View the user's ID card.
-     */
-    public function viewIdCard(Request $request)
-    {
-        $user = $request->user();
-
-        if (!$user->id_card) {
-            abort(404);
-        }
-
-        try {
-            // Convert BLOB to image response
-            return response($user->id_card)
-                ->header('Content-Type', 'image/jpeg')
-                ->header('Content-Disposition', 'inline; filename="id-card-' . $user->fname . '-' . $user->lname . '.jpg"');
-        } catch (\Exception $e) {
-            abort(404);
+            return Redirect::route('profile.edit')
+                ->with('error', 'We could not save your profile. Please try again.');
         }
     }
 
