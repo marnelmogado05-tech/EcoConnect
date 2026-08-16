@@ -150,12 +150,12 @@
             @enderror
             
             <!-- Display current ID card if exists -->
-            @if($user->id_card)
+            @if($user->id_card_path)
                 <div class="mt-3 current-file">
                     <p class="mb-2 text-sm text-gray-600">Current ID Card:</p>
                     <div class="current-id-card">
-                        <img src="data:image/jpeg;base64,{{ base64_encode($user->id_card) }}" 
-                             alt="Current ID Card" 
+                        <img src="{{ route('profile.id-card.view') }}"
+                             alt="Current ID Card"
                              class="current-id-image"
                              onerror="this.style.display='none'">
                         <div class="id-card-actions">

@@ -145,6 +145,11 @@ class PoliceIncidentController extends Controller
     {
         $incident = Incident::findOrFail($id);
 
+        // Without this, any officer could act on any incident — upload evidence to it,
+        // change its status, and attach their own documentation — just by changing the
+        // id in the URL. The route's 'police' middleware only established the role.
+        $this->authorize('takeAction', $incident);
+
         // Validate documentation notes
         $validated = $request->validate([
             'resolution_details' => 'required|string|min:10',

@@ -163,6 +163,10 @@ public function resolve(Request $request, $id)
     {
         $incident = Incident::findOrFail($id);
 
+        // See PoliceIncidentController::taken — the role middleware established that the
+        // caller is a BFP officer, not that this incident is theirs.
+        $this->authorize('takeAction', $incident);
+
         // Validate documentation notes
         $validated = $request->validate([
             'resolution_details' => 'required|string|min:10',

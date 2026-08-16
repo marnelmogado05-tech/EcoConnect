@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\IdCardStorage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,6 +16,16 @@ use Illuminate\Support\Facades\Mail;
 
 class RegisteredUserController extends Controller
 {
+    /**
+     * How long a verification code stays valid.
+     */
+    private const OTP_TTL_MINUTES = 10;
+
+    /**
+     * Guesses allowed before the code is discarded and must be resent.
+     */
+    private const OTP_MAX_ATTEMPTS = 5;
+
     /**
      * Display the registration view.
      */
@@ -45,19 +56,19 @@ class RegisteredUserController extends Controller
 
         $userInput = $request->only('fname', 'mname', 'lname', 'extname', 'phone', 'email', 'password');
         $userInput['password'] = Hash::make($userInput['password']);
-        $userInput['id_card'] = base64_encode(file_get_contents($request->file('id_card')->getRealPath()));
 
-        // Store user input data and OTP in session
-        $otp = rand(100000, 999999);
+        // The upload goes straight to private storage and only its path travels in the
+        // session. Previously the file was base64-encoded into the session itself, so a
+        // 5 MB ID became roughly 6.7 MB of session payload — written twice, under two
+        // different keys — before the account even existed.
+        $userInput['id_card_path'] = IdCardStorage::store($request->file('id_card'), 'pending');
+
+        $otp = $this->issueOtp($request, $userInput['email']);
+
         $request->session()->put('pending_user_data', $userInput);
-        $request->session()->put('pending_user_id_card', $userInput['id_card']);
-        $request->session()->put('otp', $otp);
 
-        // Send OTP email
-        Mail::to($userInput['email'])->send(new \App\Mail\OtpVerificationMail($otp));
-
-        // Redirect to OTP verification page
-        return redirect()->route('otp.verify')->with('success', 'OTP sent to your email. Please verify to complete registration.');
+        return redirect()->route('otp.verify')
+            ->with('success', 'A verification code has been sent to your email address.');
     }
     /**
      * Show OTP verification page
@@ -80,29 +91,34 @@ class RegisteredUserController extends Controller
             'otp_input' => ['required', 'digits:6'],
         ]);
 
-        $otp = $request->session()->get('otp');
-        if (!$otp || $request->otp_input != $otp) {
-            return back()->withErrors(['otp_input' => 'Invalid OTP entered.'])->withInput();
-        }
-
         $userData = $request->session()->get('pending_user_data');
-        if (!$userData) {
-            return redirect()->route('register')->withErrors(['otp_input' => 'Session expired or no registration data found. Please register again.']);
+
+        if (! $userData) {
+            return redirect()->route('register')
+                ->withErrors(['otp_input' => 'Your registration session has expired. Please register again.']);
         }
 
-        $userData['id_card'] = base64_decode($request->session()->get('pending_user_id_card'));
+        if (! $this->otpMatches($request, $request->otp_input)) {
+            return back()->withErrors(['otp_input' => 'That code is not valid.'])->withInput();
+        }
 
-        // Create the user
+        // Move the ID card out of the pending area now that the account is real.
+        $userData['id_card_path'] = IdCardStorage::promote($userData['id_card_path']);
+
+        // Set explicitly rather than relying on a column default, so the account is
+        // immediately visible to the notification listeners that filter on status.
+        $userData['role'] = 'user';
+        $userData['status'] = 'Active';
+
         $user = User::create($userData);
 
-        // Clear session
-        $request->session()->forget('otp');
+        $this->clearOtp($request);
         $request->session()->forget('pending_user_data');
-        $request->session()->forget('pending_user_id_card');
 
         Mail::to($user->email)->send(new \App\Mail\RegistrationMail($user));
 
         Auth::login($user);
+        $request->session()->regenerate();
 
         return redirect()->route('dashboard')->with('success', 'Registration completed successfully!');
     }
@@ -112,15 +128,71 @@ class RegisteredUserController extends Controller
     public function resendOtp(Request $request): RedirectResponse
     {
         $userData = $request->session()->get('pending_user_data');
-        if (!$userData) {
-            return redirect()->route('register')->withErrors(['otp_input' => 'Session expired or no registration data found. Please register again.']);
+
+        if (! $userData) {
+            return redirect()->route('register')
+                ->withErrors(['otp_input' => 'Your registration session has expired. Please register again.']);
         }
 
-        $otp = rand(100000, 999999);
+        $this->issueOtp($request, $userData['email']);
+
+        return back()->with('success', 'A new verification code has been sent.');
+    }
+
+    /**
+     * Generate a code, email it, and record only its hash.
+     *
+     * The previous implementation used rand() — not cryptographically secure — kept the
+     * code in the session as plain text, gave it no expiry, and counted no attempts.
+     * With no throttling on the verify route either, a six-digit code was a one-million
+     * guess space open to unlimited attempts.
+     */
+    private function issueOtp(Request $request, string $email): string
+    {
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        $request->session()->put('otp', [
+            'hash' => Hash::make($otp),
+            'expires_at' => now()->addMinutes(self::OTP_TTL_MINUTES)->timestamp,
+            'attempts' => 0,
+        ]);
+
+        Mail::to($email)->send(new \App\Mail\OtpVerificationMail($otp));
+
+        return $otp;
+    }
+
+    /**
+     * Check a submitted code, consuming one attempt.
+     */
+    private function otpMatches(Request $request, string $submitted): bool
+    {
+        $otp = $request->session()->get('otp');
+
+        if (! is_array($otp) || now()->timestamp > $otp['expires_at']) {
+            $this->clearOtp($request);
+
+            return false;
+        }
+
+        if ($otp['attempts'] >= self::OTP_MAX_ATTEMPTS) {
+            $this->clearOtp($request);
+
+            return false;
+        }
+
+        $otp['attempts']++;
         $request->session()->put('otp', $otp);
 
-        Mail::to($userData['email'])->send(new \App\Mail\OtpVerificationMail($otp));
+        if (! Hash::check($submitted, $otp['hash'])) {
+            return false;
+        }
 
-        return back()->with('success', 'OTP resent to your email.');
+        return true;
+    }
+
+    private function clearOtp(Request $request): void
+    {
+        $request->session()->forget('otp');
     }
 }

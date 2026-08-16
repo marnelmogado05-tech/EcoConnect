@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Incident;
 use App\Models\Municipality;
 use App\Models\Barangay;
+use App\Support\IdCardStorage;
 
 class AdminbfpController extends Controller
 {
@@ -150,8 +151,7 @@ class AdminbfpController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // Convert image to BLOB
-        $idCardBlob = file_get_contents($request->file('id_card')->getRealPath());
+        $idCardPath = IdCardStorage::store($request->file('id_card'));
 
         $user = User::create([
             'fname' => $request->fname,
@@ -160,7 +160,7 @@ class AdminbfpController extends Controller
             'extname' => $request->extname,
             'phone' => $request->phone,
             'municipality_id' => $request->municipality_id,
-            'id_card' => $idCardBlob,
+            'id_card_path' => $idCardPath,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'bfp',
@@ -191,11 +191,12 @@ class AdminbfpController extends Controller
 
         // Process ID card image if provided - store as BLOB
         if ($request->hasFile('id_card')) {
-            $validated['id_card'] = file_get_contents($request->file('id_card')->getRealPath());
-        } else {
-            // Keep the existing ID card
-            unset($validated['id_card']);
+            $previousPath = $bfp->id_card_path;
+            $validated['id_card_path'] = IdCardStorage::store($request->file('id_card'));
+            IdCardStorage::delete($previousPath);
         }
+
+        unset($validated['id_card']);
 
         // Update bfp officer
         $bfp->update($validated);

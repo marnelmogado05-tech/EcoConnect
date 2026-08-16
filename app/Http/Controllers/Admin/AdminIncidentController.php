@@ -277,7 +277,8 @@ class AdminIncidentController extends Controller
     {
         $incident = Incident::findOrFail($id);
 
-        // For reject method
+        $this->authorize('manage', $incident);
+
         $validated = $request->validate([
             'resolution_details' => 'required|string'
         ]);
@@ -307,7 +308,8 @@ class AdminIncidentController extends Controller
     {
         $incident = Incident::findOrFail($id);
 
-        // For assign method
+        $this->authorize('manage', $incident);
+
         $validated = $request->validate([
             'assigned_to' => 'required|exists:users,id',
             'priority' => 'required|in:Normal,High,Urgent',
@@ -349,7 +351,8 @@ class AdminIncidentController extends Controller
     {
         $incident = Incident::findOrFail($id);
 
-        // For reject method
+        $this->authorize('manage', $incident);
+
         $validated = $request->validate([
             'rejection_reason' => 'required|string'
         ]);

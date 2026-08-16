@@ -52,13 +52,30 @@ test('registering sends a one-time code and does not yet create the account', fu
     $this->assertDatabaseCount('users', 0);
 });
 
+/**
+ * The code is only ever held as a hash in the session, so the test reads it from the
+ * message that was actually sent — which also proves it was emailed.
+ */
+function sentOtp(): string
+{
+    $code = null;
+
+    Mail::assertSent(OtpVerificationMail::class, function (OtpVerificationMail $mail) use (&$code) {
+        $code = $mail->otp;
+
+        return true;
+    });
+
+    return $code;
+}
+
 test('new users can register once the one-time code is confirmed', function () {
     Mail::fake();
 
     $this->post('/register', registrationPayload());
 
     $response = $this->post('/otp-verify', [
-        'otp_input' => session('otp'),
+        'otp_input' => sentOtp(),
     ]);
 
     $response->assertRedirect(route('dashboard', absolute: false));
@@ -76,7 +93,7 @@ test('an incorrect one-time code does not create the account', function () {
 
     $this->post('/register', registrationPayload());
 
-    $wrongCode = str_pad((string) ((((int) session('otp')) + 1) % 1000000), 6, '0', STR_PAD_LEFT);
+    $wrongCode = str_pad((string) ((((int) sentOtp()) + 1) % 1000000), 6, '0', STR_PAD_LEFT);
 
     $response = $this->post('/otp-verify', ['otp_input' => $wrongCode]);
 
