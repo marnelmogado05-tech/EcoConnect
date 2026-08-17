@@ -34,14 +34,19 @@ class BFPDashboardController extends Controller
         $incidentsByType = Incident::where('assigned_to', $userId)
             ->select('incident_type', DB::raw('count(*) as count'))
             ->groupBy('incident_type')
-            ->pluck('count', 'incident_type')
+            ->get()
+            // Keyed by the stored value: incident_type is cast to an enum, and an
+            // enum instance cannot be used as an array key.
+            ->mapWithKeys(fn ($row) => [$row->incident_type->value => $row->count])
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = IncidentStatus::cases();
-        $incidentsByStatus = IncidentStatus::cases();
-        foreach ($possibleStatuses as $status) {
-            $incidentsByStatus[$status] = Incident::where('assigned_to', $userId)->where('status', $status)->count();
+        // Keyed by the stored value: an enum instance cannot be an array key.
+        $incidentsByStatus = [];
+        foreach (IncidentStatus::cases() as $status) {
+            $incidentsByStatus[$status->value] = Incident::where('assigned_to', $userId)
+                ->where('status', $status)
+                ->count();
         }
 
         // Monthly incidents last 12 months

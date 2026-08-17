@@ -51,14 +51,18 @@ class AdminAnalyticsController extends Controller
         $incidentsByType = (clone $incidentQuery)->selectRaw('incident_type, COUNT(*) as count')
             ->groupBy('incident_type')
             ->get()
-            ->pluck('count', 'incident_type')
+            // Keyed by the stored value: incident_type is cast to an enum, and an
+            // enum instance cannot be used as an array key.
+            ->mapWithKeys(fn ($row) => [$row->incident_type->value => $row->count])
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = IncidentStatus::cases();
-        $incidentsByStatus = IncidentStatus::cases();
-        foreach ($possibleStatuses as $status) {
-            $incidentsByStatus[$status] = (clone $incidentQuery)->where('status', $status)->count();
+        // Keyed by the stored value: an enum instance cannot be an array key.
+        $incidentsByStatus = [];
+        foreach (IncidentStatus::cases() as $status) {
+            $incidentsByStatus[$status->value] = (clone $incidentQuery)
+                ->where('status', $status)
+                ->count();
         }
 
         // Monthly incidents for the last 12 months (or filtered period if shorter)
