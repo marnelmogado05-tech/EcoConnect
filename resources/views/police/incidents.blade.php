@@ -513,7 +513,7 @@
                                                                                     </small>
                                                                                     @if($image->latitude && $image->longitude)
                                                                                         <br><small class="text-muted">
-                                                                                            <i class="fas fa-map-marker-alt"></i> {{ $image->address }}
+                                                                                            <i class="fas fa-map-marker-alt"></i> {{ $image->display_address }}
                                                                                         </small>
                                                                                     @endif
                                                                                 </div>
@@ -543,7 +543,7 @@
                                                                                     </small>
                                                                                     @if($video->latitude && $video->longitude)
                                                                                         <br><small class="text-muted">
-                                                                                            <i class="fas fa-map-marker-alt"></i> {{ $image->address }}
+                                                                                            <i class="fas fa-map-marker-alt"></i> {{ $image->display_address }}
                                                                                         </small>
                                                                                     @endif
                                                                                     <div class="mt-2">

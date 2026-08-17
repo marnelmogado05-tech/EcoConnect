@@ -134,7 +134,7 @@
                                         @if($images->count() > 0)
                                             @foreach ($images as $image)
                                                 @if($image->latitude && $image->longitude)
-                                                    <small class="text-muted"> {{ $image->address }}</small>
+                                                    <small class="text-muted"> {{ $image->display_address }}</small>
                                                 @else
                                                     <span class="text-muted">Not specified</span>
                                                 @endif

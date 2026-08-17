@@ -10,20 +10,46 @@ use App\Models\Incident;
 use App\Http\Controllers\Controller;
 use App\Models\MediaEvidence;
 use App\Events\IncidentReported;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\IncidentReportedEmail;
-use App\Jobs\ValidateIncidentLocation;
+use App\Jobs\ResolveIncidentLocation;
 
 class UserIncidentController extends Controller
 {
+    /**
+     * Upload bounds.
+     *
+     * The character limits are on the base64 text, which is roughly a third larger than
+     * the bytes it encodes: 8 MB of characters is about 6 MB of image, and 40 MB is
+     * about 30 MB of video.
+     */
+    private const MAX_PHOTOS = 10;
+
+    private const MAX_VIDEOS = 3;
+
+    private const MAX_PHOTO_CHARS = 8_000_000;
+
+    private const MAX_VIDEO_CHARS = 40_000_000;
+
+    /**
+     * Image types accepted for evidence.
+     */
+    private const ALLOWED_IMAGE_TYPES = ['jpeg', 'jpg', 'png', 'gif', 'webp'];
+
+    /**
+     * Video types accepted for evidence.
+     */
+    private const ALLOWED_VIDEO_TYPES = ['mp4', 'webm', 'quicktime', 'mov', 'ogg'];
+
     public function create()
     {
         return view('user.report');
@@ -47,20 +73,35 @@ class UserIncidentController extends Controller
         DB::beginTransaction();
 
         try {
-            // Validate the request
+            // The media arrives as base64 in the request body. That is not a shape worth
+            // defending long-term — real multipart uploads belong here — but until then
+            // the bounds have to be explicit: the previous rules were 'sometimes|array'
+            // and 'sometimes|string' with no limit on count or size, so a single request
+            // could carry unlimited payload straight into base64_decode().
             $validated = $request->validate([
-                'incident_type' => 'required|string|max:255',
-                'description' => 'required|string',
-                'latitude' => 'required|numeric|between:-90,90',
-                'longitude' => 'required|numeric|between:-180,180',
-                'photos' => 'sometimes|array',
-                'photos.*' => 'sometimes|string',
-                'videos' => 'sometimes|array',
-                'video_blobs' => 'sometimes|array',
-                'photos_latitude' => 'sometimes|array',
-                'photos_longitude' => 'sometimes|array',
-                'videos_latitude' => 'sometimes|array',
-                'videos_longitude' => 'sometimes|array',
+                'incident_type' => ['required', Rule::enum(IncidentType::class)],
+                'description' => ['required', 'string', 'max:5000'],
+                'latitude' => ['required', 'numeric', 'between:-90,90'],
+                'longitude' => ['required', 'numeric', 'between:-180,180'],
+
+                'photos' => ['sometimes', 'array', 'max:'.self::MAX_PHOTOS],
+                'photos.*' => ['string', 'max:'.self::MAX_PHOTO_CHARS],
+                'video_blobs' => ['sometimes', 'array', 'max:'.self::MAX_VIDEOS],
+                'video_blobs.*' => ['string', 'max:'.self::MAX_VIDEO_CHARS],
+
+                'photos_latitude' => ['sometimes', 'array', 'max:'.self::MAX_PHOTOS],
+                'photos_latitude.*' => ['nullable', 'numeric', 'between:-90,90'],
+                'photos_longitude' => ['sometimes', 'array', 'max:'.self::MAX_PHOTOS],
+                'photos_longitude.*' => ['nullable', 'numeric', 'between:-180,180'],
+                'videos_latitude' => ['sometimes', 'array', 'max:'.self::MAX_VIDEOS],
+                'videos_latitude.*' => ['nullable', 'numeric', 'between:-90,90'],
+                'videos_longitude' => ['sometimes', 'array', 'max:'.self::MAX_VIDEOS],
+                'videos_longitude.*' => ['nullable', 'numeric', 'between:-180,180'],
+            ], [
+                'photos.max' => 'You can attach at most '.self::MAX_PHOTOS.' photos to a report.',
+                'photos.*.max' => 'One of the photos is too large. Please use a smaller image.',
+                'video_blobs.max' => 'You can attach at most '.self::MAX_VIDEOS.' videos to a report.',
+                'video_blobs.*.max' => 'One of the videos is too large. Please record a shorter clip.',
             ]);
 
             // Allowed municipalities
@@ -121,14 +162,12 @@ class UserIncidentController extends Controller
 
             $user = Auth::user();
 
-            // Dispatch background jobs (non-blocking)
-            ValidateIncidentLocation::dispatch(
-                $incident,
-                $validated['photos_latitude'] ?? [],
-                $validated['photos_longitude'] ?? [],
-                $validated['videos_latitude'] ?? [],
-                $validated['videos_longitude'] ?? []
-            );
+            // Resolve where this happened, once, off the request path. The job reads the
+            // coordinates from the media rows written above rather than taking them as
+            // constructor arguments, so there is one source of truth and no chance of the
+            // two drifting apart — the previous job took three arguments while this call
+            // site passed five, silently discarding the video coordinates.
+            ResolveIncidentLocation::dispatch($incident);
 
             // Send email asynchronously via queue (don't wait for it)
             Mail::to($user->email)->queue(new IncidentReportedEmail($incident, $user));
@@ -164,18 +203,45 @@ class UserIncidentController extends Controller
      */
     private function generateIncidentTitle($incidentType): string
     {
-        $typeMap = [
-            'Illegal Logging' => 'Illegal Logging',
-            'Pollution' => 'Pollution',
-            'Wildlife Crime' => 'Wildlife Crime',
-            'Illegal Waste Disposal' => 'Illegal Waste Disposal',
-            'Other' => 'Other Environmental Incident'
-        ];
-
-        $typeName = $typeMap[$incidentType] ?? 'Environmental Incident';
+        $typeName = IncidentType::tryFrom((string) $incidentType)?->label() ?? 'Environmental Incident';
         $timestamp = Carbon::now()->format('M j, Y g:i A');
 
         return "{$typeName} - {$timestamp}";
+    }
+
+    /**
+     * Decode a base64 data URI, refusing anything not on the allow-list.
+     *
+     * The subtype used to be taken straight from the data URI and appended to the
+     * filename, so the caller chose the stored file's extension.
+     *
+     * @param  array<int, string>  $allowedSubtypes
+     * @return array{extension: string, bytes: string}|null
+     */
+    private function decodeDataUri(string $payload, string $kind, array $allowedSubtypes): ?array
+    {
+        if (! preg_match('#^data:'.$kind.'/([a-zA-Z0-9.+-]+);base64,#', $payload, $matches)) {
+            return null;
+        }
+
+        $subtype = strtolower($matches[1]);
+
+        if (! in_array($subtype, $allowedSubtypes, true)) {
+            Log::warning("Rejected {$kind} upload with disallowed subtype: {$subtype}");
+
+            return null;
+        }
+
+        $bytes = base64_decode(substr($payload, strpos($payload, ',') + 1), true);
+
+        if ($bytes === false || $bytes === '') {
+            return null;
+        }
+
+        return [
+            'extension' => $subtype === 'quicktime' ? 'mov' : $subtype,
+            'bytes' => $bytes,
+        ];
     }
 
     /**
@@ -183,47 +249,16 @@ class UserIncidentController extends Controller
      */
     private function processPhoto($photoData, $incidentId, $validated, $index)
     {
-        try {
-            // Extract base64 data
-            if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $matches)) {
-                $imageType = $matches[1];
-                $imageData = substr($photoData, strpos($photoData, ',') + 1);
-                $imageData = base64_decode($imageData);
+        $decoded = $this->decodeDataUri((string) $photoData, 'image', self::ALLOWED_IMAGE_TYPES);
 
-                if ($imageData === false) {
-                    throw new \Exception('Invalid base64 image data');
-                }
-
-                // Generate unique filename
-                $filename = 'photo_' . time() . '_' . Str::random(10) . '.' . $imageType;
-                $filePath = 'incidents/media/' . $filename;
-
-                // Store the file using Laravel's storage
-                // Private disk: evidence is legal material with coordinates attached and
-                // must not be reachable by URL without an authorisation check.
-                Storage::disk('local')->put($filePath, $imageData);
-
-                // Get location data for this photo
-                $latitude = isset($validated['photos_latitude'][$index]) ?
-                    (float)$validated['photos_latitude'][$index] : null;
-                $longitude = isset($validated['photos_longitude'][$index]) ?
-                    (float)$validated['photos_longitude'][$index] : null;
-
-                // Create media evidence record
-                MediaEvidence::create([
-                    'incident_id' => $incidentId,
-                    'file_path' => $filePath,
-                    'file_name' => $filename,
-                    'mime_type' => 'image/' . $imageType,
-                    'file_size' => Storage::disk('local')->size($filePath),
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Photo processing error: ' . $e->getMessage());
-            throw $e;
+        if ($decoded === null) {
+            return;
         }
+
+        $this->storeEvidence($decoded, 'photo', 'image', $incidentId, [
+            'latitude' => $validated['photos_latitude'][$index] ?? null,
+            'longitude' => $validated['photos_longitude'][$index] ?? null,
+        ]);
     }
 
     /**
@@ -231,45 +266,42 @@ class UserIncidentController extends Controller
      */
     private function processVideo($videoData, $incidentId, $validated, $index)
     {
-        try {
-            // Extract base64 data
-            if (preg_match('/^data:video\/(\w+);base64,/', $videoData, $matches)) {
-                $videoType = $matches[1];
-                $videoBinary = substr($videoData, strpos($videoData, ',') + 1);
-                $videoBinary = base64_decode($videoBinary);
+        $decoded = $this->decodeDataUri((string) $videoData, 'video', self::ALLOWED_VIDEO_TYPES);
 
-                if ($videoBinary === false) {
-                    throw new \Exception('Invalid base64 video data');
-                }
-
-                // Generate unique filename
-                $filename = 'video_' . time() . '_' . Str::random(10) . '.' . $videoType;
-                $filePath = 'incidents/media/' . $filename;
-
-                // Store the file using Laravel's storage
-                Storage::disk('local')->put($filePath, $videoBinary);
-
-                // Get location data for this video
-                $latitude = isset($validated['videos_latitude'][$index]) ?
-                    (float)$validated['videos_latitude'][$index] : null;
-                $longitude = isset($validated['videos_longitude'][$index]) ?
-                    (float)$validated['videos_longitude'][$index] : null;
-
-                // Create media evidence record
-                MediaEvidence::create([
-                    'incident_id' => $incidentId,
-                    'file_path' => $filePath,
-                    'file_name' => $filename,
-                    'mime_type' => 'video/' . $videoType,
-                    'file_size' => Storage::disk('local')->size($filePath),
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error('Video processing error: ' . $e->getMessage());
-            throw $e;
+        if ($decoded === null) {
+            return;
         }
+
+        $this->storeEvidence($decoded, 'video', 'video', $incidentId, [
+            'latitude' => $validated['videos_latitude'][$index] ?? null,
+            'longitude' => $validated['videos_longitude'][$index] ?? null,
+        ]);
+    }
+
+    /**
+     * Write a decoded upload to private storage and record it.
+     *
+     * @param  array{extension: string, bytes: string}  $decoded
+     * @param  array{latitude: mixed, longitude: mixed}  $coordinates
+     */
+    private function storeEvidence(array $decoded, string $prefix, string $kind, int $incidentId, array $coordinates): void
+    {
+        $filename = $prefix.'_'.now()->timestamp.'_'.Str::random(10).'.'.$decoded['extension'];
+        $filePath = 'incidents/media/'.$filename;
+
+        // Private disk: evidence is legal material with coordinates attached and must
+        // not be reachable by URL without an authorisation check.
+        Storage::disk('local')->put($filePath, $decoded['bytes']);
+
+        MediaEvidence::create([
+            'incident_id' => $incidentId,
+            'file_path' => $filePath,
+            'file_name' => $filename,
+            'mime_type' => $kind.'/'.$decoded['extension'],
+            'file_size' => strlen($decoded['bytes']),
+            'latitude' => is_numeric($coordinates['latitude']) ? (float) $coordinates['latitude'] : null,
+            'longitude' => is_numeric($coordinates['longitude']) ? (float) $coordinates['longitude'] : null,
+        ]);
     }
 
     private function processFileUpload($file, $incidentId, $validated)
@@ -322,61 +354,25 @@ class UserIncidentController extends Controller
 
     public function index(Request $request)
     {
-        $query = Incident::with(['mediaEvidence', 'assignedTo', 'followups'])
-            ->where('user_id', Auth::id())
-            ->latest();
+        $incidents = $this->filtered($request)
+            ->with(['mediaEvidence', 'assignedTo', 'followups'])
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
 
-        // Apply filters - use filled() instead of has() for better validation
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('type')) {
-            $query->where('incident_type', $request->type);
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%")
-                ->orWhere('reference_number', 'like', "%{$search}%");
-            });
-        }
-
-        $incidents = $query->paginate(10);
-
-        // foreach ($incidents as $incident) {
-        //     foreach ($incident->mediaEvidence as $media) {
-        //         $address = $media->address; // This will automatically call the accessor
-        //     }
-        // }
-
-        // Statistics - apply same filters for accurate counts
-        $statsQuery = Incident::where('user_id', Auth::id());
-
-        if ($request->filled('status')) {
-            $statsQuery->where('status', $request->status);
-        }
-
-        if ($request->filled('type')) {
-            $statsQuery->where('incident_type', $request->type);
-        }
-
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $statsQuery->where(function($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%")
-                ->orWhere('reference_number', 'like', "%{$search}%");
-            });
-        }
+        // One grouped query rather than four. The filter block used to be written out
+        // twice — once for the list and once for the counts — and the counts then ran a
+        // separate COUNT per status on top.
+        $counts = $this->filtered($request)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
 
         $stats = [
-            'total' => $statsQuery->count(),
-            'pending' => (clone $statsQuery)->where('status', IncidentStatus::Pending)->count(),
-            'in_progress' => (clone $statsQuery)->where('status', IncidentStatus::InProgress)->count(),
-            'resolved' => (clone $statsQuery)->where('status', IncidentStatus::Resolved)->count(),
+            'total' => (int) $counts->sum(),
+            'pending' => (int) $counts->get(IncidentStatus::Pending->value, 0),
+            'in_progress' => (int) $counts->get(IncidentStatus::InProgress->value, 0),
+            'resolved' => (int) $counts->get(IncidentStatus::Resolved->value, 0),
         ];
 
         // Badge classes come from the enums. This copy also keyed incidentTypes by
@@ -389,5 +385,28 @@ class UserIncidentController extends Controller
             'stats',
             'incidentTypes'
         ));
+    }
+
+    /**
+     * The reporter's own incidents, narrowed by whatever filters are on the request.
+     *
+     * Declared once and used by both the list and the counts, so the two can no longer
+     * disagree about what is being shown.
+     */
+    private function filtered(Request $request): Builder
+    {
+        return Incident::query()
+            ->where('user_id', Auth::id())
+            ->when($request->filled('status'), fn (Builder $q) => $q->where('status', $request->status))
+            ->when($request->filled('type'), fn (Builder $q) => $q->where('incident_type', $request->type))
+            ->when($request->filled('search'), function (Builder $q) use ($request) {
+                $search = $request->search;
+
+                $q->where(function (Builder $inner) use ($search) {
+                    $inner->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%")
+                        ->orWhere('reference_number', 'like', "%{$search}%");
+                });
+            });
     }
 }

@@ -216,7 +216,7 @@
                                 <strong>{{ \Illuminate\Support\Str::limit($image->file_name, 20) }}</strong>
                                 @if($image->latitude && $image->longitude)
                                 <div style="color: #666; margin-top: 5px;">
-                                    📍 {{ $image->address }}
+                                    📍 {{ $image->display_address }}
                                 </div>
                                 @endif
                             </div>
@@ -248,7 +248,7 @@
                                 <div style="color: #666; margin-top: 5px;">
                                     <div>📁 {{ round($video->file_size / 1024 / 1024, 1) }} MB</div>
                                     @if($video->latitude && $video->longitude)
-                                    <div>📍 {{ $video->address }}</div>
+                                    <div>📍 {{ $video->display_address }}</div>
                                     @endif
                                 </div>
                             </div>

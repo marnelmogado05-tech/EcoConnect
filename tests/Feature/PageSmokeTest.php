@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\DB;
 | byte-for-byte copy of the BFP dashboard and referenced variables its controller never
 | passed, so it threw for every BFP officer and nothing caught it.
 |
-| Three pages are skipped rather than failing. They use MySQL-only date functions
-| (DATE_FORMAT, MONTH, DATEDIFF) and cannot run on the SQLite test connection. Making
-| those queries portable is an M4 item; the tests are written and waiting.
+| The analytics and officer dashboards used to be skipped here: they relied on MySQL-only
+| date functions and could not run on the SQLite test connection. That skip hid two real
+| defects for the length of a milestone, which is why M4 made those queries portable —
+| every page in this file now runs on both drivers.
 |
 */
 
@@ -79,7 +80,4 @@ test('analytics and officer dashboards render', function (string $uri, string $r
     ['/admin/analytics', 'admin'],
     ['/police/dashboard', 'police'],
     ['/bfp/dashboard', 'bfp'],
-])->skip(
-    fn () => DB::connection()->getDriverName() === 'sqlite',
-    'Uses MySQL-only date functions (DATE_FORMAT, MONTH, DATEDIFF); portability is an M4 item.'
-);
+]);

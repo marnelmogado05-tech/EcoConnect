@@ -33,6 +33,8 @@ class MediaEvidence extends Model
         'file_size',
         'latitude',
         'longitude',
+        'address',
+        'geocoded_at',
     ];
 
     /**
@@ -46,6 +48,7 @@ class MediaEvidence extends Model
         'longitude' => 'decimal:8',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'geocoded_at' => 'datetime',
     ];
 
     /**
@@ -277,57 +280,27 @@ class MediaEvidence extends Model
         }
     }
 
-    public function getAddressAttribute()
+    /**
+     * A readable address for this evidence, or a note explaining why there isn't one.
+     *
+     * This used to perform an uncached HTTP request to Nominatim every time it was
+     * read. Any Blade loop over evidence became N sequential calls to a third-party
+     * service, and because it is an accessor it also fired during model serialization,
+     * inside queue payloads, and in tests. The value is now resolved once by
+     * ResolveIncidentLocation and stored on the row.
+     */
+    public function getDisplayAddressAttribute(): string
     {
-        // If no coordinates, return early
-        if (!$this->latitude || !$this->longitude) {
-            return 'No coordinates';
+        if (! $this->hasLocation()) {
+            return 'No coordinates recorded';
         }
 
-        try {
-            $response = Http::withHeaders([
-                'User-Agent' => 'EcoConnect/1.0',
-            ])->get('https://nominatim.openstreetmap.org/reverse', [
-                'format' => 'jsonv2',
-                'lat' => $this->latitude,
-                'lon' => $this->longitude,
-                'addressdetails' => 1,
-                'zoom' => 18,
-            ]);
-
-            if ($response->successful()) {
-                $address = $response->json('address');
-                
-                // Build address components
-                $street = $address['road'] ?? $address['footway'] ?? null;
-                $houseNumber = $address['house_number'] ?? null;
-                $barangay = $address['neighbourhood'] 
-                    ?? $address['suburb'] 
-                    ?? $address['village'] 
-                    ?? null;
-                $municipality = $address['city'] 
-                    ?? $address['town'] 
-                    ?? $address['municipality'] 
-                    ?? $address['county'] 
-                    ?? null;
-                $province = $address['state'] ?? null;
-                $postcode = $address['postcode'] ?? null;
-                
-                // Construct full address
-                $fullAddress = [];
-                if ($houseNumber) $fullAddress[] = $houseNumber;
-                if ($street) $fullAddress[] = $street;
-                if ($barangay) $fullAddress[] = $barangay;
-                if ($municipality) $fullAddress[] = $municipality;
-                if ($province) $fullAddress[] = $province;
-                if ($postcode) $fullAddress[] = $postcode;
-                
-                return implode(', ', $fullAddress);
-            } else {
-                return 'Address not found';
-            }
-        } catch (\Exception $e) {
-            return 'Error fetching address';
+        if (filled($this->address)) {
+            return $this->address;
         }
+
+        return $this->geocoded_at
+            ? 'Address unavailable'
+            : 'Resolving address…';
     }
 }

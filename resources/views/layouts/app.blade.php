@@ -700,8 +700,11 @@
             </main>
         </div>
     </div>
+    {{-- Bootstrap 5.3.0 was loaded immediately after 5.3.6 here, so every page on the
+         staff side downloaded and executed two copies of the framework, the older one
+         winning. Bringing these assets into the Vite build is an M5 item, deferred to
+         avoid doing the work twice while these layouts are being decomposed. --}}
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>

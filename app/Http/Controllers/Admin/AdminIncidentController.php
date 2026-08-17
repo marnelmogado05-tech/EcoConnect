@@ -43,7 +43,9 @@ class AdminIncidentController extends Controller
                             ->where('status', UserStatus::Active)
                             ->get();
 
-        $query = Incident::with(['mediaEvidence', 'assignedTo', 'followups'])
+        // `user` is eager-loaded because the table renders the reporter's name and
+        // email; without it each row issued its own query.
+        $query = Incident::with(['user', 'mediaEvidence', 'assignedTo', 'followups'])
             ->latest();
 
         // Apply basic filters first
@@ -82,34 +84,27 @@ class AdminIncidentController extends Controller
             });
         }
 
-        // Municipality filter - Only process if explicitly selected
+        // Municipality is resolved once at write time by ResolveIncidentLocation, so
+        // filtering is an indexed comparison. This used to load every incident with
+        // coordinates, reverse-geocode each one against Nominatim, and usleep(200000)
+        // between calls to respect the rate limit — a filter that took minutes and
+        // discarded the result at the end of the request.
         if ($request->filled('municipality')) {
-            $municipality = $request->municipality;
-
-            // Get a limited set of incidents with coordinates for geocoding
-            $incidentIdsWithCoords = $this->getIncidentIdsWithCoordinates();
-
-            if ($incidentIdsWithCoords->isNotEmpty()) {
-                $matchingIncidentIds = $this->findIncidentsByMunicipality($incidentIdsWithCoords, $municipality);
-
-                if ($matchingIncidentIds->isNotEmpty()) {
-                    $query->whereIn('id', $matchingIncidentIds);
-                } else {
-                    // No matches found, return empty results
-                    $query->where('id', 0);
-                }
-            } else {
-                // No incidents with coordinates
-                $query->where('id', 0);
-            }
+            $query->where('municipality_name', $request->municipality);
         }
 
         $incidents = $query->paginate(10)->withQueryString();
 
-        // Get municipalities for dropdown (cached for performance)
-        $municipalities = cache()->remember('municipalities_list', 86400, function () { // Cache for 24 hours
-            return $this->getAvailableMunicipalities();
-        });
+        // The municipalities that incidents have actually been resolved to — one indexed
+        // DISTINCT, where this used to reverse-geocode every unique coordinate pair in
+        // the table with sleep(1) between calls. A 24-hour cache hid the cost from most
+        // requests but not from the unlucky one that had to rebuild it, and a timeout
+        // meant the cache was never written and the next admin paid it again.
+        $municipalities = Incident::query()
+            ->whereNotNull('municipality_name')
+            ->distinct()
+            ->orderBy('municipality_name')
+            ->pluck('municipality_name');
 
         // Badge classes and labels come from the enums now. They were previously
         // copy-pasted into five controllers, and this one keyed incidentTypes by
@@ -126,109 +121,15 @@ class AdminIncidentController extends Controller
         ));
     }
 
-    /**
-     * Get incidents that have media evidence with coordinates
+    /*
+     * getIncidentIdsWithCoordinates(), findIncidentsByMunicipality(),
+     * getAvailableMunicipalities() and municipalityMatches() all lived here. Between
+     * them they reverse-geocoded the incident table on demand while rendering, with
+     * sleep(1) and usleep(200000) calls to stay under the Nominatim rate limit.
+     * ResolveIncidentLocation does that work once, off the request path, and
+     * LocationService now normalises the "Pamplona, Cagayan" case at the point of
+     * resolution instead of at every comparison.
      */
-    private function getIncidentIdsWithCoordinates()
-    {
-        return Incident::whereHas('mediaEvidence', function($q) {
-            $q->whereNotNull('latitude')->whereNotNull('longitude');
-        })->pluck('id');
-    }
-
-    /**
-     * Find incidents by municipality with strict limits to prevent timeout
-     */
-    private function findIncidentsByMunicipality($incidentIds, $targetMunicipality)
-    {
-        $locationService = app(LocationService::class);
-        $matchingIds = collect();
-
-        // Get incidents with their media evidence
-        $incidents = Incident::with(['mediaEvidence' => function($q) {
-            $q->whereNotNull('latitude')->whereNotNull('longitude');
-        }])->whereIn('id', $incidentIds)
-          ->get();
-
-        foreach ($incidents as $incident) {
-            foreach ($incident->mediaEvidence as $media) {
-                try {
-                    $municipality = $locationService->getMunicipalityFromCoordinates(
-                        $media->latitude,
-                        $media->longitude
-                    );
-
-                    if ($municipality && $this->municipalityMatches($municipality, $targetMunicipality)) {
-                        $matchingIds->push($incident->id);
-                        break; // Found match, move to next incident
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("Geocoding failed for media {$media->id}: " . $e->getMessage());
-                    continue;
-                }
-            }
-            // Small delay to respect API rate limits
-            usleep(200000); // 200ms delay
-        }
-        return $matchingIds->unique();
-    }
-
-    /**
-     * Get available municipalities from existing data
-     */
-    private function getAvailableMunicipalities()
-    {
-        $locationService = app(LocationService::class);
-        $municipalities = collect();
-
-        // Get unique coordinates to minimize API calls
-        $uniqueCoordinates = MediaEvidence::whereNotNull('latitude')
-            ->whereNotNull('longitude')
-            ->select('latitude', 'longitude')
-            ->distinct()
-            ->get();
-
-        foreach ($uniqueCoordinates as $coords) {
-            try {
-                $municipality = $locationService->getMunicipalityFromCoordinates(
-                    $coords->latitude,
-                    $coords->longitude
-                );
-
-                if ($municipality && !$municipalities->contains($municipality)) {
-                    $municipalities->push($municipality);
-                }
-
-                // Respect API rate limits - 1 request per second
-                sleep(1);
-
-            } catch (\Exception $e) {
-                Log::warning("Geocoding failed for coordinates {$coords->latitude},{$coords->longitude}: " . $e->getMessage());
-                continue;
-            }
-        }
-
-        return $municipalities->sort()->values();
-    }
-
-    /**
-     * Check if municipality names match, handling variations like "Pamplona" vs "Pamplona, Navarre"
-     */
-    private function municipalityMatches($returnedMunicipality, $targetMunicipality)
-    {
-        $returned = trim(strtolower($returnedMunicipality));
-        $target = trim(strtolower($targetMunicipality));
-
-        // Exact match
-        if ($returned === $target) {
-            return true;
-        }
-
-        // Check if target is the primary municipality name (before comma)
-        // e.g., "Pamplona" matches "Pamplona, Navarre"
-        $primaryMunicipality = explode(',', $returned)[0];
-        return $primaryMunicipality === $target;
-    }
 
     /*
      * getIncidentMunicipality() lived here: a public controller method that was never

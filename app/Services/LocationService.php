@@ -2,127 +2,130 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Reverse-geocodes coordinates through Nominatim.
+ *
+ * Every method here reaches the network, so nothing in this class belongs in a request.
+ * It is called from queued jobs only; the resolved values are written to the incident
+ * and read from there afterwards.
+ */
 class LocationService
 {
-    public function getMunicipalityFromCoordinates($latitude, $longitude)
+    /**
+     * How long a resolved coordinate pair stays cached.
+     */
+    private const CACHE_TTL = 86400;
+
+    /**
+     * Resolve a coordinate pair to a municipality name and a formatted address.
+     *
+     * One request serves both, where the old code made separate calls for the
+     * municipality and the address of the same point.
+     *
+     * @return array{municipality: ?string, address: ?string}
+     */
+    public function resolve(float|string|null $latitude, float|string|null $longitude): array
     {
-        // Validate coordinates
-        if (!$this->isValidCoordinates($latitude, $longitude)) {
-            return null;
+        $empty = ['municipality' => null, 'address' => null];
+
+        if (! $this->isValidCoordinates($latitude, $longitude)) {
+            return $empty;
         }
 
-        // Cache key for these coordinates
-        $cacheKey = "municipality_{$latitude}_{$longitude}";
+        $cacheKey = 'geocode:'.round((float) $latitude, 5).','.round((float) $longitude, 5);
 
-        return Cache::remember($cacheKey, 86400, function () use ($latitude, $longitude) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($latitude, $longitude, $empty) {
             try {
-                // Using Nominatim (OpenStreetMap) - Free service
                 $response = Http::timeout(10)
+                    ->connectTimeout(5)
                     ->withHeaders([
                         'User-Agent' => 'EcoConnect/1.0',
-                        'Accept' => 'application/json'
+                        'Accept' => 'application/json',
                     ])
                     ->get('https://nominatim.openstreetmap.org/reverse', [
                         'lat' => $latitude,
                         'lon' => $longitude,
-                        'format' => 'json',
+                        'format' => 'jsonv2',
                         'addressdetails' => 1,
-                        'zoom' => 10,
-                        'namedetails' => 0
+                        'zoom' => 18,
                     ]);
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $this->extractMunicipality($data);
-                } else {
-                    Log::warning("Geocoding API responded with error: " . $response->status());
-                }
-            } catch (\Exception $e) {
-                Log::error("Geocoding failed for {$latitude},{$longitude}: " . $e->getMessage());
-            }
+                if (! $response->successful()) {
+                    Log::warning('Geocoding API responded with status '.$response->status());
 
-            return null;
+                    return $empty;
+                }
+
+                $address = $response->json('address') ?? [];
+
+                return [
+                    'municipality' => $this->extractMunicipality($address),
+                    'address' => $this->formatAddress($address),
+                ];
+            } catch (\Throwable $e) {
+                Log::error("Geocoding failed for {$latitude},{$longitude}: ".$e->getMessage());
+
+                return $empty;
+            }
         });
     }
 
-    private function isValidCoordinates($latitude, $longitude)
+    /**
+     * Municipality name only.
+     */
+    public function getMunicipalityFromCoordinates(float|string|null $latitude, float|string|null $longitude): ?string
     {
-        if (!is_numeric($latitude) || !is_numeric($longitude)) {
+        return $this->resolve($latitude, $longitude)['municipality'];
+    }
+
+    private function isValidCoordinates(float|string|null $latitude, float|string|null $longitude): bool
+    {
+        if (! is_numeric($latitude) || ! is_numeric($longitude)) {
             return false;
         }
 
-        $lat = floatval($latitude);
-        $lon = floatval($longitude);
+        $lat = (float) $latitude;
+        $lon = (float) $longitude;
 
-        return ($lat >= -90 && $lat <= 90) && ($lon >= -180 && $lon <= 180);
-    }
-
-    private function extractMunicipality($data)
-    {
-        $address = $data['address'] ?? [];
-
-        // Try different address components that might contain municipality name
-        // Priority order for municipality detection
-        return $address['municipality'] ??
-               $address['city'] ??
-               $address['town'] ??
-               $address['village'] ??
-               $address['county'] ??
-               $address['state_district'] ??
-               $address['state'] ??
-               null;
+        return $lat >= -90 && $lat <= 90 && $lon >= -180 && $lon <= 180;
     }
 
     /**
-     * Get full address details for more information
+     * @param  array<string, mixed>  $address
      */
-    public function getFullAddressFromCoordinates($latitude, $longitude)
+    private function extractMunicipality(array $address): ?string
     {
-        if (!$this->isValidCoordinates($latitude, $longitude)) {
-            return null;
-        }
+        $name = $address['municipality']
+            ?? $address['city']
+            ?? $address['town']
+            ?? $address['village']
+            ?? $address['county']
+            ?? null;
 
-        $cacheKey = "full_address_{$latitude}_{$longitude}";
-
-        return Cache::remember($cacheKey, 86400, function () use ($latitude, $longitude) {
-            try {
-                $response = Http::timeout(10)
-                    ->withHeaders([
-                        'User-Agent' => 'EcoConnect/1.0',
-                        'Accept' => 'application/json'
-                    ])
-                    ->get('https://nominatim.openstreetmap.org/reverse', [
-                        'lat' => $latitude,
-                        'lon' => $longitude,
-                        'format' => 'json',
-                        'addressdetails' => 1,
-                        'zoom' => 10
-                    ]);
-
-                if ($response->successful()) {
-                    return $response->json();
-                }
-            } catch (\Exception $e) {
-                Log::error("Full address geocoding failed: " . $e->getMessage());
-            }
-
-            return null;
-        });
+        // Nominatim sometimes qualifies a name, e.g. "Pamplona, Cagayan".
+        return $name === null ? null : trim(explode(',', $name)[0]);
     }
 
     /**
-     * Clear cache for specific coordinates
+     * Build a human-readable address from the response components.
+     *
+     * @param  array<string, mixed>  $address
      */
-    public function clearCache($latitude, $longitude)
+    private function formatAddress(array $address): ?string
     {
-        $cacheKey = "municipality_{$latitude}_{$longitude}";
-        Cache::forget($cacheKey);
+        $parts = array_filter([
+            $address['house_number'] ?? null,
+            $address['road'] ?? $address['footway'] ?? null,
+            $address['neighbourhood'] ?? $address['suburb'] ?? $address['village'] ?? null,
+            $address['city'] ?? $address['town'] ?? $address['municipality'] ?? $address['county'] ?? null,
+            $address['state'] ?? null,
+            $address['postcode'] ?? null,
+        ]);
 
-        $fullAddressKey = "full_address_{$latitude}_{$longitude}";
-        Cache::forget($fullAddressKey);
+        return $parts === [] ? null : implode(', ', $parts);
     }
 }
