@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\IncidentPriority;
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
 use App\Observers\IncidentObserver;
 use App\Policies\IncidentPolicy;
 use Illuminate\Database\Eloquent\Attributes\ObservedBy;
@@ -9,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
@@ -50,9 +54,14 @@ class Incident extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'status' => IncidentStatus::class,
+        'priority' => IncidentPriority::class,
+        'incident_type' => IncidentType::class,
         'incident_date' => 'date',
         'resolved_date' => 'date',
-        'assigned_at' => 'date',
+        // Was cast as 'date' while every writer passes now(), silently discarding the
+        // time an incident was assigned.
+        'assigned_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'date_taken_into_action' => 'datetime',
@@ -60,31 +69,6 @@ class Incident extends Model
         'location_is_valid' => 'boolean',
         'validated_locations' => 'array',
     ];
-
-    /**
-     * Incident type constants
-     */
-    const TYPE_ILLEGAL_LOGGING = 'Illegal Logging';
-    const TYPE_POLLUTION = 'Pollution';
-    const TYPE_WILDLIFE_CRIME = 'Wildlife Crime';
-    const TYPE_ILLEGAL_WASTE_DISPOSAL = 'Illegal Waste Disposal';
-    const TYPE_OTHER = 'Other';
-
-    /**
-     * Status constants
-     */
-    const STATUS_PENDING = 'Pending';
-    const STATUS_IN_PROGRESS = 'In Progress';
-    const STATUS_RESOLVED = 'Resolved';
-    const STATUS_REJECTED = 'Rejected';
-
-    /**
-     * Priority constants
-     */
-    const PRIORITY_NORMAL = 'Normal';
-    const PRIORITY_HIGH = 'High';
-    const PRIORITY_URGENT = 'Urgent';
-
 
     /**
      * Generate unique reference number
@@ -191,7 +175,7 @@ class Incident extends Model
      */
     public function scopePending($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->where('status', IncidentStatus::Pending);
     }
 
     /**
@@ -199,7 +183,7 @@ class Incident extends Model
      */
     public function scopeInProgress($query)
     {
-        return $query->where('status', self::STATUS_IN_PROGRESS);
+        return $query->where('status', IncidentStatus::InProgress);
     }
 
     /**
@@ -207,7 +191,7 @@ class Incident extends Model
      */
     public function scopeResolved($query)
     {
-        return $query->where('status', self::STATUS_RESOLVED);
+        return $query->where('status', IncidentStatus::Resolved);
     }
 
     /**
@@ -215,7 +199,7 @@ class Incident extends Model
      */
     public function scopeRejected($query)
     {
-        return $query->where('status', self::STATUS_REJECTED);
+        return $query->where('status', IncidentStatus::Rejected);
     }
 
     /**
@@ -231,7 +215,7 @@ class Incident extends Model
      */
     public function scopeHighPriority($query)
     {
-        return $query->where('priority', self::PRIORITY_HIGH);
+        return $query->where('priority', IncidentPriority::High);
     }
 
     /**
@@ -239,7 +223,7 @@ class Incident extends Model
      */
     public function scopeUrgentPriority($query)
     {
-        return $query->where('priority', self::PRIORITY_URGENT);
+        return $query->where('priority', IncidentPriority::Urgent);
     }
 
     /**
@@ -263,7 +247,7 @@ class Incident extends Model
      */
     public function isPending(): bool
     {
-        return $this->status === self::STATUS_PENDING;
+        return $this->status === IncidentStatus::Pending;
     }
 
     /**
@@ -271,7 +255,7 @@ class Incident extends Model
      */
     public function isInProgress(): bool
     {
-        return $this->status === self::STATUS_IN_PROGRESS;
+        return $this->status === IncidentStatus::InProgress;
     }
 
     /**
@@ -279,7 +263,7 @@ class Incident extends Model
      */
     public function isResolved(): bool
     {
-        return $this->status === self::STATUS_RESOLVED;
+        return $this->status === IncidentStatus::Resolved;
     }
 
     /**
@@ -287,7 +271,7 @@ class Incident extends Model
      */
     public function isRejected(): bool
     {
-        return $this->status === self::STATUS_REJECTED;
+        return $this->status === IncidentStatus::Rejected;
     }
 
     /**
@@ -303,7 +287,7 @@ class Incident extends Model
      */
     public function isHighPriority(): bool
     {
-        return $this->priority === self::PRIORITY_HIGH;
+        return $this->priority === IncidentPriority::High;
     }
 
     /**
@@ -311,7 +295,7 @@ class Incident extends Model
      */
     public function isUrgentPriority(): bool
     {
-        return $this->priority === self::PRIORITY_URGENT;
+        return $this->priority === IncidentPriority::Urgent;
     }
 
     /**
@@ -340,97 +324,38 @@ class Incident extends Model
 
     /**
      * Get available incident types for forms.
+     *
+     * @return array<string, string>
      */
     public static function getIncidentTypes(): array
     {
-        return [
-            self::TYPE_ILLEGAL_LOGGING => 'Illegal Logging',
-            self::TYPE_POLLUTION => 'Pollution',
-            self::TYPE_WILDLIFE_CRIME => 'Wildlife Crime',
-            self::TYPE_ILLEGAL_WASTE_DISPOSAL => 'Illegal Waste Disposal',
-            self::TYPE_OTHER => 'Other',
-        ];
+        return IncidentType::options();
     }
 
-    /**
-     * Get available statuses for forms.
+    /*
+     * assignTo(), markAsResolved(), reject() and updatePriority() used to live here.
+     * Every one of them was written and called by nothing — each controller
+     * reimplemented the same update inline, with slightly different behaviour. State
+     * transitions now belong to IncidentWorkflowService, which is the only thing that
+     * moves an incident between statuses.
      */
-    public static function getStatuses(): array
-    {
-        return [
-            self::STATUS_PENDING => 'Pending',
-            self::STATUS_IN_PROGRESS => 'In Progress',
-            self::STATUS_RESOLVED => 'Resolved',
-            self::STATUS_REJECTED => 'Rejected',
-        ];
-    }
 
-    /**
-     * Get available priorities for forms.
-     */
-    public static function getPriorities(): array
-    {
-        return [
-            self::PRIORITY_NORMAL => 'Normal',
-            self::PRIORITY_HIGH => 'High',
-            self::PRIORITY_URGENT => 'Urgent',
-        ];
-    }
-
-    /**
-     * Assign the incident to a staff member.
-     */
-    public function assignTo(User $user): void
-    {
-        $this->update([
-            'assigned_to' => $user->id,
-            'assigned_at' => now(),
-            'status' => self::STATUS_IN_PROGRESS,
-        ]);
-    }
-
-    /**
-     * Mark incident as resolved.
-     */
-    public function markAsResolved(string $resolutionDetails): void
-    {
-        $this->update([
-            'status' => self::STATUS_RESOLVED,
-            'resolution_details' => $resolutionDetails,
-            'resolved_date' => now(),
-        ]);
-    }
-
-    /**
-     * Reject incident with reason.
-     */
-    public function reject(string $reason): void
-    {
-        $this->update([
-            'status' => self::STATUS_REJECTED,
-            'rejection_reason' => $reason,
-        ]);
-    }
-
-    /**
-     * Update priority level.
-     */
-    public function updatePriority(string $priority): void
-    {
-        $this->update(['priority' => $priority]);
-    }
-
-    public function acknowledgement()
+    public function acknowledgement(): HasOne
     {
         return $this->hasOne(IncidentAcknowledgement::class);
     }
 
-    public function getDocumentationAcknowledgement()
+    /**
+     * The relation is acknowledgement(), singular. This called acknowledgements() and
+     * threw a BadMethodCallException on sight.
+     */
+    public function getDocumentationAcknowledgement(): ?IncidentAcknowledgement
     {
-        return $this->acknowledgements()->first();
+        return $this->acknowledgement()->first();
     }
 
-    public function followups(): HasMany {
+    public function followups(): HasMany
+    {
         return $this->hasMany(IncidentFollowup::class)->orderByDesc('created_at');
     }
 }

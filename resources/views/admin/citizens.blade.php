@@ -178,8 +178,8 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $citizen->status == 'Active' ? 'bg-success' : 'bg-danger' }}">
-                                                {{ ucfirst($citizen->status) }}
+                                            <span class="badge {{ $citizen->status?->value === 'Active' ? 'bg-success' : 'bg-danger' }}">
+                                                {{ $citizen->status?->label() }}
                                             </span>
                                         </td>
                                         <td>
@@ -218,8 +218,8 @@
                                                         <div class="mb-3">
                                                             <label for="status" class="form-label">Account Status</label>
                                                             <select class="form-select" id="status" name="status" required>
-                                                                <option value="Active" {{ $citizen->status == 'Active' ? 'selected' : '' }}>Active</option>
-                                                                <option value="Suspended" {{ $citizen->status == 'Suspended' ? 'selected' : '' }}>Suspended</option>
+                                                                <option value="Active" {{ $citizen->status?->value === 'Active' ? 'selected' : '' }}>Active</option>
+                                                                <option value="Suspended" {{ $citizen->status?->value === 'Suspended' ? 'selected' : '' }}>Suspended</option>
                                                             </select>
                                                         </div>
                                                         <div class="alert alert-info">

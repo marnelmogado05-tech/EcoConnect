@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Incident;
@@ -17,7 +19,7 @@ class AdminCitizenController extends Controller
     public function index(Request $request)
     {
         $filters = [
-            'status' => $request->get('status', 'Active'),
+            'status' => $request->get('status', UserStatus::Active->value),
             'search' => $request->get('search')
         ];
 
@@ -27,8 +29,8 @@ class AdminCitizenController extends Controller
             'total' => User::where('role', 'user')->count(),
             // The role is 'user'; 'citizen' exists nowhere else in the system, so both of
             // these counters read zero permanently.
-            'active' => User::where('role', 'user')->where('status', 'Active')->count(),
-            'suspended' => User::where('role', 'user')->where('status', 'Suspended')->count(),
+            'active' => User::where('role', 'user')->where('status', UserStatus::Active)->count(),
+            'suspended' => User::where('role', 'user')->where('status', UserStatus::Suspended)->count(),
             'reports' => Incident::count(),
         ];
 
@@ -43,10 +45,10 @@ class AdminCitizenController extends Controller
         $query = User::where('role', 'user')
                     ->withCount(['incidents as total_reports',
                                 'incidents as pending_reports' => function($q) {
-                                    $q->where('status', 'Pending');
+                                    $q->where('status', IncidentStatus::Pending);
                                 },
                                 'incidents as resolved_reports' => function($q) {
-                                    $q->where('status', 'Resolved');
+                                    $q->where('status', IncidentStatus::Resolved);
                                 }])
                     ->orderBy('lname');
 
@@ -77,10 +79,10 @@ class AdminCitizenController extends Controller
         $citizen = User::where('role', 'user')
                       ->withCount(['incidents as total_reports',
                                   'incidents as pending_reports' => function($q) {
-                                      $q->where('status', 'Pending');
+                                      $q->where('status', IncidentStatus::Pending);
                                   },
                                   'incidents as resolved_reports' => function($q) {
-                                      $q->where('status', 'Resolved');
+                                      $q->where('status', IncidentStatus::Resolved);
                                   }])
                       ->with(['incidents' => function($q) {
                           $q->latest()->limit(10);

@@ -106,7 +106,7 @@
                                                 'Other' => 'Other'
                                             ];
                                         @endphp
-                                        {{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}
+                                        {{ $incident->incident_type?->label() }}
                                     </td>
                                     <td>
                                         @if($incident->mediaEvidence->count() > 0)
@@ -138,8 +138,8 @@
                                                 'Rejected' => 'bg-danger text-white'
                                             ];
                                         @endphp
-                                        <span class="badge {{ $statusClasses[$incident->status] ?? 'bg-secondary' }} fw-semibold">
-                                            {{ $incident->status }}
+                                        <span class="badge {{ $incident->status?->badgeClass() }} fw-semibold">
+                                            {{ $incident->status?->value }}
                                         </span>
                                     </td>
                                     <td class="text-muted small">{{ $incident->created_at->format('M j, Y') }}</td>
@@ -167,7 +167,7 @@
                                                 'Other' => 'Other'
                                             ];
                                         @endphp
-                                        {{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}
+                                        {{ $incident->incident_type?->label() }}
                                     </p>
                                     @if($incident->mediaEvidence->count() > 0)
                                         @php
@@ -199,8 +199,8 @@
                                             'Rejected' => 'bg-danger text-white'
                                         ];
                                     @endphp
-                                    <span class="badge {{ $statusClasses[$incident->status] ?? 'bg-secondary' }} fw-semibold px-2 py-1">
-                                        {{ $incident->status }}
+                                    <span class="badge {{ $incident->status?->badgeClass() }} fw-semibold px-2 py-1">
+                                        {{ $incident->status?->value }}
                                     </span>
                                 </div>
                             </div>

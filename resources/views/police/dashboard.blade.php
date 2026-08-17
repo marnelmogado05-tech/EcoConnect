@@ -119,7 +119,7 @@
                                             'Other' => 'Other'
                                         ];
                                     @endphp
-                                    {{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}
+                                    {{ $incident->incident_type?->label() }}
                                 </td>
                                 <td>
                                     @if($incident->mediaEvidence->count() > 0)
@@ -151,8 +151,8 @@
                                             'Rejected' => 'bg-danger text-white'
                                         ];
                                     @endphp
-                                    <span class="badge {{ $statusClasses[$incident->status] ?? 'bg-secondary' }}">
-                                        {{ $incident->status }}
+                                    <span class="badge {{ $incident->status?->badgeClass() }}">
+                                        {{ $incident->status?->value }}
                                     </span>
                                 </td>
                                 <td>{{ $incident->created_at->format('M j, Y') }}</td>

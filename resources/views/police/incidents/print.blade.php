@@ -164,23 +164,23 @@
             <tr>
                 <td>{{ $incident->reference_number }}</td>
                 <td>{{ $incident->user->fname }} {{ $incident->user->lname }}</td>
-                <td>{{ $incident->incident_type }}</td>
+                <td>{{ $incident->incident_type?->value }}</td>
                 <td>{{ \Illuminate\Support\Str::limit(strip_tags($incident->description), 50) }}</td>
                 <td>
                     <span class="badge
-                        @if($incident->priority == 'Urgent') bg-danger
-                        @elseif($incident->priority == 'High') bg-warning
+                        @if($incident->priority?->value === 'Urgent') bg-danger
+                        @elseif($incident->priority?->value === 'High') bg-warning
                         @else bg-success @endif">
-                        {{ $incident->priority }}
+                        {{ $incident->priority?->value }}
                     </span>
                 </td>
                 <td>
                     <span class="badge
-                        @if($incident->status == 'Resolved') bg-success
-                        @elseif($incident->status == 'In Progress') bg-primary
-                        @elseif($incident->status == 'Rejected') bg-danger
+                        @if($incident->status?->value === 'Resolved') bg-success
+                        @elseif($incident->status?->value === 'In Progress') bg-primary
+                        @elseif($incident->status?->value === 'Rejected') bg-danger
                         @else bg-secondary @endif">
-                        {{ $incident->status }}
+                        {{ $incident->status?->value }}
                     </span>
                 </td>
                 <td>{{ $incident->incident_date->format('M j, Y') }}</td>

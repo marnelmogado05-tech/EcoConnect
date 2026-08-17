@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\User;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\MediaEvidence;
@@ -18,9 +19,9 @@ class UserDashboardController extends Controller
         // Get statistics for the authenticated user
         $stats = [
             'total' => Incident::where('user_id', $user->id)->count(),
-            'pending' => Incident::where('user_id', $user->id)->where('status', 'Pending')->count(),
-            'in_progress' => Incident::where('user_id', $user->id)->where('status', 'In Progress')->count(),
-            'resolved' => Incident::where('user_id', $user->id)->where('status', 'Resolved')->count(),
+            'pending' => Incident::where('user_id', $user->id)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => Incident::where('user_id', $user->id)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => Incident::where('user_id', $user->id)->where('status', IncidentStatus::Resolved)->count(),
         ];
 
         // Get recent incidents (last 5)

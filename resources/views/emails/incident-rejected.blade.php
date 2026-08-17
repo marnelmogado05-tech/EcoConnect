@@ -153,7 +153,7 @@
             <div class="incident-details">
                 <h3>📊 Report Summary</h3>
                 <p><strong>Reference Number:</strong> {{ $incident->reference_number }}</p>
-                <p><strong>Incident Type:</strong> {{ $incident->incident_type }}</p>
+                <p><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</p>
                 <p><strong>Final Status:</strong> 
                     <span class="status-badge rejected">REJECTED</span>
                 </p>

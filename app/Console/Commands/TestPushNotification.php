@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\SendPushNotification;
-use App\Models\FcmToken;
+use App\Models\PushSubscription;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -34,17 +34,15 @@ class TestPushNotification extends Command
         $this->info('    EcoConnect Test Push Notification');
         $this->info('═══════════════════════════════════════════');
 
-        // Check if user has FCM tokens
-        $tokenCount = FcmToken::where('user_id', $userId)
-            ->where('is_active', true)
-            ->count();
+        $subscriptionCount = PushSubscription::activeFor((int) $userId)->count();
 
-        if ($tokenCount === 0) {
-            $this->error("✗ User {$userId} has no active FCM tokens");
+        if ($subscriptionCount === 0) {
+            $this->error("✗ User {$userId} has no active push subscriptions");
+
             return;
         }
 
-        $this->info("✓ Found {$tokenCount} active token(s) for user {$userId}");
+        $this->info("✓ Found {$subscriptionCount} active subscription(s) for user {$userId}");
         $this->newLine();
 
         // Send test notification

@@ -23,9 +23,8 @@ class ProfileController extends Controller
         $municipalities = \App\Models\Municipality::all();
         $barangays = \App\Models\Barangay::all();
 
-        $layout = auth()->user()->role === 'admin' || auth()->user()->role === 'police' || auth()->user()->role === 'bfp'
-        ? 'layouts.app'
-        : 'layouts.mobile-user';
+        // Staff get the desktop chrome; citizens get the mobile layout.
+        $layout = auth()->user()->isUser() ? 'layouts.mobile-user' : 'layouts.app';
 
         return view('profile.edit', [
             'user' => $request->user(),

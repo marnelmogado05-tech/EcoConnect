@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Police;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Incident;
@@ -17,9 +18,9 @@ class PoliceDashboardController extends Controller
         // Get statistics for the authenticated user
         $stats = [
             'total' => Incident::where('assigned_to', $userId)->count(),
-            'pending' => Incident::where('assigned_to', $userId)->where('status', 'Pending')->count(),
-            'in_progress' => Incident::where('assigned_to', $userId)->where('status', 'In Progress')->count(),
-            'resolved' => Incident::where('assigned_to', $userId)->where('status', 'Resolved')->count(),
+            'pending' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Resolved)->count(),
         ];
 
         // Get recent incidents (last 5)
@@ -37,8 +38,8 @@ class PoliceDashboardController extends Controller
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = ['Pending', 'In Progress', 'Resolved'];
-        $incidentsByStatus = [];
+        $possibleStatuses = IncidentStatus::cases();
+        $incidentsByStatus = IncidentStatus::cases();
         foreach ($possibleStatuses as $status) {
             $incidentsByStatus[$status] = Incident::where('assigned_to', $userId)->where('status', $status)->count();
         }
@@ -53,7 +54,7 @@ class PoliceDashboardController extends Controller
             ->toArray();
 
         // Avg resolution time for resolved incidents
-        $resolvedIncidents = Incident::where('assigned_to', $userId)->where('status', 'Resolved')->get();
+        $resolvedIncidents = Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Resolved)->get();
         $avgResolutionTime = 0;
         if ($resolvedIncidents->count() > 0) {
             $totalDays = 0;

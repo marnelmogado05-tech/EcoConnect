@@ -2,8 +2,16 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentPriority;
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
+use App\Services\IncidentWorkflowService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use RuntimeException;
 use App\Models\Incident;
 use App\Models\User;
 use App\Models\MediaEvidence;
@@ -27,12 +35,12 @@ class AdminIncidentController extends Controller
         // whereIn, not where()->orWhere(): the ungrouped version parsed as
         // (role = 'police') OR (role = 'bfp' AND status = 'Active'), which put inactive
         // police officers into the assignment dropdown.
-        $policeUsers = User::whereIn('role', ['police', 'bfp'])
-                            ->where('status', 'Active')
+        $policeUsers = User::whereIn('role', UserRole::responderValues())
+                            ->where('status', UserStatus::Active)
                             ->get();
 
-        $bfpUsers = User::where('role', 'bfp')
-                            ->where('status', 'Active')
+        $bfpUsers = User::where('role', UserRole::Bfp)
+                            ->where('status', UserStatus::Active)
                             ->get();
 
         $query = Incident::with(['mediaEvidence', 'assignedTo', 'followups'])
@@ -103,34 +111,14 @@ class AdminIncidentController extends Controller
             return $this->getAvailableMunicipalities();
         });
 
-        // Badge classes for status and priority
-        $statusBadgeClasses = [
-            'Pending' => 'bg-warning',
-            'In Progress' => 'bg-info',
-            'Resolved' => 'bg-success',
-            'Rejected' => 'bg-danger',
-            'Assigned' => 'bg-primary'
-        ];
-
-        $priorityBadgeClasses = [
-            'Normal' => 'bg-secondary',
-            'High' => 'bg-warning',
-            'Urgent' => 'bg-danger'
-        ];
-
-        // Incident type mapping
-        $incidentTypes = [
-            'illegal_logging' => 'Illegal Logging',
-            'pollution' => 'Pollution',
-            'wildlife_crime' => 'Wildlife Crime',
-            'illegal_waste_disposal' => 'Illegal Waste Disposal',
-            'other' => 'Other'
-        ];
+        // Badge classes and labels come from the enums now. They were previously
+        // copy-pasted into five controllers, and this one keyed incidentTypes by
+        // snake_case values that the database never contained, so the type filter on
+        // this page could not match anything.
+        $incidentTypes = IncidentType::options();
 
         return view('admin.incidents', compact(
             'incidents',
-            'statusBadgeClasses',
-            'priorityBadgeClasses',
             'incidentTypes',
             'policeUsers',
             'bfpUsers',
@@ -242,38 +230,13 @@ class AdminIncidentController extends Controller
         return $primaryMunicipality === $target;
     }
 
-    /**
-     * Get municipality for a specific incident (for display in table)
+    /*
+     * getIncidentMunicipality() lived here: a public controller method that was never
+     * routed and never called, geocoding one incident on demand. M4 replaces this whole
+     * approach with a municipality resolved once at write time.
      */
-    public function getIncidentMunicipality($incidentId)
-    {
-        try {
-            $incident = Incident::with(['mediaEvidence' => function($q) {
-                $q->whereNotNull('latitude')->whereNotNull('longitude');
-            }])->findOrFail($incidentId);
 
-            if ($incident->mediaEvidence->isEmpty()) {
-                return null;
-            }
-
-            $locationService = app(LocationService::class);
-
-            // Use the first media evidence with coordinates
-            $media = $incident->mediaEvidence->first();
-            $municipality = $locationService->getMunicipalityFromCoordinates(
-                $media->latitude,
-                $media->longitude
-            );
-
-            return $municipality;
-
-        } catch (\Exception $e) {
-            Log::error('Error getting municipality for incident: ' . $e->getMessage());
-            return null;
-        }
-    }
-
-    public function resolve(Request $request, $id)
+    public function resolve(Request $request, IncidentWorkflowService $workflow, $id)
     {
         $incident = Incident::findOrFail($id);
 
@@ -284,27 +247,21 @@ class AdminIncidentController extends Controller
         ]);
 
         try {
-            // Store previous status for logging
-            $previousStatus = $incident->status;
-
-            // Update the incident
-            $incident->update([
-                'status' => 'Resolved',
-                'resolution_details' => $validated['resolution_details'],
-                'resolved_date' => now(),
-            ]);
-
-            Mail::to($incident->user->email)->send(new IncidentResolvedMail($incident, $incident->user));
+            $workflow->resolve($incident, $validated['resolution_details']);
 
             return redirect()->back()->with('success', 'Incident successfully resolved.');
-
+        } catch (RuntimeException $e) {
+            // A refused transition is worth telling the user about verbatim: it says
+            // what state the incident is actually in.
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Error resolving incident: ' . $e->getMessage());
+            Log::error('Error resolving incident: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Failed to resolve incident. Please try again.');
         }
     }
 
-    public function assign(Request $request, $id)
+    public function assign(Request $request, IncidentWorkflowService $workflow, $id)
     {
         $incident = Incident::findOrFail($id);
 
@@ -312,7 +269,7 @@ class AdminIncidentController extends Controller
 
         $validated = $request->validate([
             'assigned_to' => 'required|exists:users,id',
-            'priority' => 'required|in:Normal,High,Urgent',
+            'priority' => ['required', Rule::enum(IncidentPriority::class)],
         ], [
             'assigned_to.required' => 'Please select a police officer to assign.',
             'assigned_to.exists' => 'The selected police officer does not exist.',
@@ -321,33 +278,31 @@ class AdminIncidentController extends Controller
         ]);
 
         try {
-
             // The ungrouped form was (id = X AND role = 'police') OR role = 'bfp', so this
             // could return an arbitrary BFP user unrelated to the requested id — and then
             // email the assignment to them.
             $assignedOfficer = User::where('id', $validated['assigned_to'])
-                              ->whereIn('role', ['police', 'bfp'])
+                              ->whereIn('role', UserRole::responderValues())
                               ->firstOrFail();
 
-            // Update the incident
-            $incident->update([
-                'assigned_to' => $validated['assigned_to'],
-                'priority' => $validated['priority'],
-                'status' => 'Assigned',
-                'assigned_at' => now()
-            ]);
-
-            Mail::to($assignedOfficer->email)->send(new IncidentAssignedMail($incident, $assignedOfficer, auth()->user()));
+            $workflow->assign(
+                $incident,
+                $assignedOfficer,
+                IncidentPriority::from($validated['priority']),
+                auth()->user(),
+            );
 
             return redirect()->back()->with('success', 'Incident successfully assigned to police officer.');
-
+        } catch (RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Error assigning incident: ' . $e->getMessage());
+            Log::error('Error assigning incident: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Failed to assign incident. Please try again.');
         }
     }
 
-    public function reject(Request $request, $id)
+    public function reject(Request $request, IncidentWorkflowService $workflow, $id)
     {
         $incident = Incident::findOrFail($id);
 
@@ -358,24 +313,14 @@ class AdminIncidentController extends Controller
         ]);
 
         try {
-            // Store previous status for logging
-            $previousStatus = $incident->status;
+            $workflow->reject($incident, $validated['rejection_reason']);
 
-            // Update the incident
-            $incident->update([
-                'status' => 'Rejected',
-                'rejection_reason' => $validated['rejection_reason'],
-                'assigned_to' => null // Remove assignment if any
-            ]);
-
-
-
-            Mail::to($incident->user->email)->send(new IncidentRejectedMail($incident, $incident->user));
-            Log::info('Incident rejected');
             return redirect()->back()->with('success', 'Incident successfully dismissed.');
-
+        } catch (RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Error rejecting incident: ' . $e->getMessage());
+            Log::error('Error rejecting incident: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Failed to reject incident. Please try again.');
         }
     }
@@ -464,12 +409,9 @@ class AdminIncidentController extends Controller
         return $query;
     }
 
-    public function respondToFollowup(Request $request, Incident $incident) {
-        IncidentFollowup::create([
-            'incident_id' => $incident->id,
-            'user_id' => auth()->id(),
-            'follow_up_text' => $request->response,
-            'follow_up_type' => 'Staff Response'
-        ]);
-    }
+    /*
+     * respondToFollowup() lived here: unrouted, unvalidated, unauthorised, and it
+     * returned nothing at all — so had anything reached it, the caller would have got a
+     * blank page. IncidentFollowupController::respond() is the real implementation.
+     */
 }

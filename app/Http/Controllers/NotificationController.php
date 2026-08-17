@@ -2,127 +2,117 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\FcmToken;
+use App\Models\PushSubscription;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Manages a browser's push subscription for the signed-in user.
+ *
+ * These were named around FCM tokens; nothing here has ever been an FCM token. The
+ * payload is the JSON document the browser's PushManager hands back.
+ */
 class NotificationController extends Controller
 {
     /**
-     * Save FCM token for a user
+     * Record a subscription for the current user and device.
      */
-    public function saveFcmToken(Request $request)
+    public function subscribe(Request $request): JsonResponse
     {
-        $request->validate([
-            'token' => 'required|string',
-            'device_name' => 'nullable|string',
+        $validated = $request->validate([
+            'subscription' => ['required', 'string'],
+            'device_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         try {
-            $token = FcmToken::updateOrCreate(
+            $subscription = PushSubscription::updateOrCreate(
                 [
-                    'user_id' => auth()->id(),
-                    'token' => $request->token,
+                    'user_id' => $request->user()->id,
+                    'subscription' => $validated['subscription'],
                 ],
                 [
-                    'device_name' => $request->device_name ?? 'Unknown Device',
+                    'device_name' => $validated['device_name'] ?? 'Unknown device',
                     'is_active' => true,
                 ]
             );
 
-            Log::info('FCM token saved', ['user_id' => auth()->id(), 'device' => $request->device_name]);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Notification token saved successfully',
-                'token_id' => $token->id,
+                'message' => 'Notifications enabled on this device.',
+                'subscription_id' => $subscription->id,
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to save FCM token', ['error' => $e->getMessage()]);
+            Log::error('Failed to save push subscription', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save notification token',
+                'message' => 'We could not enable notifications on this device.',
             ], 500);
         }
     }
 
     /**
-     * Remove specific FCM token
+     * Forget one subscription.
      */
-    public function removeFcmToken(Request $request)
+    public function unsubscribe(Request $request): JsonResponse
     {
-        $request->validate([
-            'token' => 'required|string',
+        $validated = $request->validate([
+            'subscription' => ['required', 'string'],
         ]);
 
         try {
-            FcmToken::where('user_id', auth()->id())
-                ->where('token', $request->token)
+            PushSubscription::where('user_id', $request->user()->id)
+                ->where('subscription', $validated['subscription'])
                 ->delete();
 
-            Log::info('FCM token removed', ['user_id' => auth()->id()]);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Notification token removed successfully',
+                'message' => 'Notifications disabled on this device.',
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to remove FCM token', ['error' => $e->getMessage()]);
+            Log::error('Failed to remove push subscription', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to remove notification token',
+                'message' => 'We could not disable notifications on this device.',
             ], 500);
         }
     }
 
     /**
-     * Remove all FCM tokens for current user
+     * Forget every subscription for the current user.
      */
-    public function removeAllTokens()
+    public function unsubscribeAll(Request $request): JsonResponse
     {
         try {
-            FcmToken::where('user_id', auth()->id())->delete();
-
-            Log::info('All FCM tokens removed for user', ['user_id' => auth()->id()]);
+            PushSubscription::where('user_id', $request->user()->id)->delete();
 
             return response()->json([
                 'success' => true,
-                'message' => 'All notification tokens removed successfully',
+                'message' => 'Notifications disabled on all devices.',
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to remove all FCM tokens', ['error' => $e->getMessage()]);
+            Log::error('Failed to remove push subscriptions', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to remove notification tokens',
+                'message' => 'We could not disable notifications.',
             ], 500);
         }
     }
 
     /**
-     * Get notification status for current user
+     * Whether the current user has any active subscription.
      */
-    public function getNotificationStatus()
+    public function status(Request $request): JsonResponse
     {
-        try {
-            $tokenCount = FcmToken::where('user_id', auth()->id())
-                ->where('is_active', true)
-                ->count();
+        $count = PushSubscription::activeFor($request->user()->id)->count();
 
-            return response()->json([
-                'success' => true,
-                'enabled' => $tokenCount > 0,
-                'token_count' => $tokenCount,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to get notification status', ['error' => $e->getMessage()]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get notification status',
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'enabled' => $count > 0,
+            'subscription_count' => $count,
+        ]);
     }
 }

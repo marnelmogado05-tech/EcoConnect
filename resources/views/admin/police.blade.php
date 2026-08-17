@@ -201,8 +201,8 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $officer->status == 'Active' ? 'bg-success' : 'bg-danger' }}">
-                                                {{ ucfirst($officer->status) }}
+                                            <span class="badge {{ $officer->status?->value === 'Active' ? 'bg-success' : 'bg-danger' }}">
+                                                {{ $officer->status?->label() }}
                                             </span>
                                         </td>
                                         <td class="text-center">
@@ -241,8 +241,8 @@
                                                         <div class="mb-3">
                                                             <label for="status" class="form-label">Account Status</label>
                                                             <select class="form-select" id="status" name="status" required>
-                                                                <option value="Active" {{ $officer->status == 'Active' ? 'selected' : '' }}>Active</option>
-                                                                <option value="Suspended" {{ $officer->status == 'Suspended' ? 'selected' : '' }}>Suspended</option>
+                                                                <option value="Active" {{ $officer->status?->value === 'Active' ? 'selected' : '' }}>Active</option>
+                                                                <option value="Suspended" {{ $officer->status?->value === 'Suspended' ? 'selected' : '' }}>Suspended</option>
                                                             </select>
                                                         </div>
                                                         <div class="alert alert-info">
@@ -359,8 +359,8 @@
                                                             <div class="col-md-6">
                                                                 <label for="edit_status_{{ $officer->id }}" class="form-label">Status *</label>
                                                                 <select class="form-select" id="edit_status_{{ $officer->id }}" name="status" required>
-                                                                    <option value="active" {{ old('status', $officer->status) == 'active' ? 'selected' : '' }}>Active</option>
-                                                                    <option value="suspended" {{ old('status', $officer->status) == 'suspended' ? 'selected' : '' }}>Suspended</option>
+                                                                    <option value="active" {{ old('status', $officer->status?->value) === 'Active' ? 'selected' : '' }}>Active</option>
+                                                                    <option value="suspended" {{ old('status', $officer->status?->value) === 'Suspended' ? 'selected' : '' }}>Suspended</option>
                                                                 </select>
                                                                 @error('status')
                                                                     <div class="mt-1 text-danger small">{{ $message }}</div>

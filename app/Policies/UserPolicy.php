@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\UserRole;
 use App\Models\User;
 
 /**
@@ -17,7 +18,7 @@ class UserPolicy
      */
     public function viewIdCard(User $user, User $subject): bool
     {
-        return $user->id === $subject->id || $user->role === 'admin';
+        return $user->id === $subject->id || $user->role === UserRole::Admin;
     }
 
     /**
@@ -25,6 +26,6 @@ class UserPolicy
      */
     public function manage(User $user, User $subject): bool
     {
-        return $user->role === 'admin' && $user->id !== $subject->id;
+        return $user->role === UserRole::Admin && $user->id !== $subject->id;
     }
 }
