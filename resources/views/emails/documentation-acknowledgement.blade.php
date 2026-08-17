@@ -77,9 +77,9 @@
             <h2>Incident Information</h2>
             <ul>
                 <li><strong>Reference Number:</strong> {{ $incident->reference_number }}</li>
-                <li><strong>Incident Type:</strong> {{ $incident->incident_type }}</li>
-                <li><strong>Priority Level:</strong> {{ $incident->priority }}</li>
-                <li><strong>Status:</strong> {{ $incident->status }}</li>
+                <li><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</li>
+                <li><strong>Priority Level:</strong> {{ $incident->priority?->value }}</li>
+                <li><strong>Status:</strong> {{ $incident->status?->value }}</li>
             </ul>
         </div>
 

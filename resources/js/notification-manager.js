@@ -155,7 +155,7 @@ class NotificationManager {
             const token = JSON.stringify(subscription);
             console.log('Saving token to server...');
 
-            const response = await fetch('/api/notifications/save-token', {
+            const response = await fetch('/api/notifications/subscribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -163,7 +163,7 @@ class NotificationManager {
                     'Accept': 'application/json',
                 },
                 body: JSON.stringify({
-                    token: token,
+                    subscription: token,
                     device_name: this.getDeviceName(),
                 }),
             });
@@ -217,14 +217,14 @@ class NotificationManager {
     async removeTokenFromServer(subscription) {
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-            await fetch('/api/notifications/remove-token', {
+            await fetch('/api/notifications/unsubscribe', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken || '',
                 },
                 body: JSON.stringify({
-                    token: JSON.stringify(subscription),
+                    subscription: JSON.stringify(subscription),
                 }),
             });
         } catch (error) {

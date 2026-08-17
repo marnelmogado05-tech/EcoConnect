@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Incident;
@@ -13,9 +14,9 @@ class AdminDashboardController extends Controller
         // Get statistics for the authenticated user
         $stats = [
             'total' => Incident::count(),
-            'pending' => Incident::where('status', 'Pending')->count(),
-            'in_progress' => Incident::where('status', 'In Progress')->count(),
-            'resolved' => Incident::where('status', 'Resolved')->count(),
+            'pending' => Incident::where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => Incident::where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => Incident::where('status', IncidentStatus::Resolved)->count(),
         ];
 
         // Get recent incidents (last 5)

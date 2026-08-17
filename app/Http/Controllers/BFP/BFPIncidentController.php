@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\BFP;
 
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
 use App\Http\Controllers\Controller;
+use App\Services\IncidentWorkflowService;
 use Illuminate\Http\Request;
+use RuntimeException;
 use App\Models\User;
 use App\Models\Incident;
 use Maatwebsite\Excel\Facades\Excel;
@@ -70,96 +74,31 @@ class BFPIncidentController extends Controller
 
         $stats = [
             'total' => (clone $statsQuery)->count(),
-            'assigned' => (clone $statsQuery)->where('status', 'Assigned')->count(),
-            'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
-            'in_progress' => (clone $statsQuery)->where('status', 'In Progress')->count(),
-            'resolved' => (clone $statsQuery)->where('status', 'Resolved')->count(),
+            'assigned' => (clone $statsQuery)->where('status', IncidentStatus::Assigned)->count(),
+            'pending' => (clone $statsQuery)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => (clone $statsQuery)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => (clone $statsQuery)->where('status', IncidentStatus::Resolved)->count(),
         ];
 
-        // Badge classes for status and priority
-        $statusBadgeClasses = [
-            'Pending' => 'bg-warning',
-            'Assigned' => 'bg-primary',
-            'In Progress' => 'bg-info',
-            'Resolved' => 'bg-success',
-            'Rejected' => 'bg-danger'
-        ];
-
-        $priorityBadgeClasses = [
-            'Normal' => 'bg-secondary',
-            'High' => 'bg-warning',
-            'Urgent' => 'bg-danger'
-        ];
-
-        // Incident type mapping (for display purposes)
-        $incidentTypes = [
-            'Illegal Logging' => 'Illegal Logging',
-            'Pollution' => 'Pollution',
-            'Wildlife Crime' => 'Wildlife Crime',
-            'Illegal Waste Disposal' => 'Illegal Waste Disposal',
-            'Other' => 'Other'
-        ];
+        // Badge classes come from the enums; the views ask the value for its own class.
+        $incidentTypes = IncidentType::options();
 
         return view('bfp.incidents', compact(
             'incidents',
             'stats',
-            'statusBadgeClasses',
-            'priorityBadgeClasses',
             'incidentTypes',
         ));
     }
 
 
-public function resolve(Request $request, $id)
-{
-    $incident = Incident::findOrFail($id);
+    /*
+     * resolve() used to sit here: unrouted, unauthorised, and despite its name it set the
+     * status to "In Progress" rather than resolving anything — a near-copy of taken()
+     * that also wrote evidence to the public disk. Resolution is an admin action; this
+     * was dead weight carrying two defects.
+     */
 
-    $validated = $request->validate([
-        'resolution_details' => 'required|string|min:10',
-        'evidence_images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120' // 5MB per image
-    ]);
-
-    try {
-        $previousStatus = $incident->status;
-
-        $incident->update([
-            'status' => 'In Progress',
-            'resolution_details' => $validated['resolution_details'],
-            'date_taken_into_action' => now(),
-        ]);
-
-        // Handle image uploads
-        if ($request->hasFile('evidence_images')) {
-            foreach ($request->file('evidence_images') as $image) {
-                if ($image->isValid()) {
-                    // Store image with custom path structure
-                    $path = $image->store(
-                        'incidents/' . $incident->reference_number,
-                        'public'
-                    );
-
-                    // Create media evidence record
-                    $incident->mediaEvidence()->create([
-                        'file_path' => $path,
-                        'file_name' => $image->getClientOriginalName(),
-                        'mime_type' => $image->getMimeType(),
-                        'file_size' => $image->getSize(),
-                    ]);
-                }
-            }
-        }
-
-        Mail::to($incident->user->email)->send(new IncidentResolvedMail($incident, $incident->user));
-
-        return redirect()->back()->with('success', 'Incident successfully taken into action with evidence uploaded.');
-
-    } catch (\Exception $e) {
-        Log::error('Error taking incident into action: ' . $e->getMessage());
-        return redirect()->back()->with('error', 'Failed to take action on incident. Please try again.');
-    }
-}
-
-    public function taken(Request $request, $id)
+    public function taken(Request $request, IncidentWorkflowService $workflow, $id)
     {
         $incident = Incident::findOrFail($id);
 
@@ -167,7 +106,6 @@ public function resolve(Request $request, $id)
         // caller is a BFP officer, not that this incident is theirs.
         $this->authorize('takeAction', $incident);
 
-        // Validate documentation notes
         $validated = $request->validate([
             'resolution_details' => 'required|string|min:10',
             'evidence_images' => 'sometimes|array',
@@ -175,69 +113,24 @@ public function resolve(Request $request, $id)
         ]);
 
         try {
-            // Store previous status for logging
-            $previousStatus = $incident->status;
-
-            // Count uploaded evidence
-            $evidenceCount = 0;
-
-            // Handle image uploads
-            if ($request->hasFile('evidence_images')) {
-                foreach ($request->file('evidence_images') as $image) {
-                    if ($image->isValid()) {
-                        // Store image with custom path structure
-                        $path = $image->store(
-                            'incidents/' . $incident->reference_number,
-                            'public'
-                        );
-
-                        // Create media evidence record
-                        $incident->mediaEvidence()->create([
-                            'file_path' => $path,
-                            'file_name' => $image->getClientOriginalName(),
-                            'mime_type' => $image->getMimeType(),
-                            'file_size' => $image->getSize(),
-                        ]);
-
-                        $evidenceCount++;
-                    }
-                }
-            }
-
-            // Update the incident to mark as taken
-            $incident->update([
-                'status' => 'In Progress',
-                'resolution_details' => $validated['resolution_details'],
-                'date_taken_into_action' => now(),
-            ]);
-
-            // Create or update acknowledgement record
-            $acknowledgement = IncidentAcknowledgement::updateOrCreate(
-                [
-                    'incident_id' => $incident->id,
-                    'officer_id' => auth()->user()->id,
-                ],
-                [
-                    'acknowledged_at' => now(),
-                    'documentation' => $validated['resolution_details'],
-                    'evidence_count' => $evidenceCount,
-                ]
+            $evidenceCount = $workflow->attachEvidence(
+                $incident,
+                $request->file('evidence_images') ?? []
             );
 
-            // Send acknowledgement receipt to officer
-            Mail::to(Auth::user()->email)->send(
-                new DocumentationAcknowledgementMail($incident, Auth::user(), $acknowledgement)
+            $workflow->takeAction(
+                $incident,
+                Auth::user(),
+                $validated['resolution_details'],
+                $evidenceCount,
             );
-
-            // Send notification to reporter
-            // Mail::to($incident->user->email)->send(
-            //     new IncidentResolvedMail($incident, $incident->user)
-            // );
 
             return redirect()->back()->with('success', 'Incident successfully taken into action. Acknowledgement receipt sent to your email.');
-
+        } catch (RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Error taking incident into action: ' . $e->getMessage());
+            Log::error('Error taking incident into action: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Failed to take action on incident. Please try again.');
         }
     }

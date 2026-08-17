@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Incident;
@@ -40,24 +41,28 @@ class AdminAnalyticsController extends Controller
         // Incident statistics
         $incidentStats = [
             'total' => (clone $incidentQuery)->count(),
-            'pending' => (clone $incidentQuery)->where('status', 'Pending')->count(),
-            'in_progress' => (clone $incidentQuery)->where('status', 'In Progress')->count(),
-            'resolved' => (clone $incidentQuery)->where('status', 'Resolved')->count(),
-            'rejected' => (clone $incidentQuery)->where('status', 'Rejected')->count(),
+            'pending' => (clone $incidentQuery)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => (clone $incidentQuery)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => (clone $incidentQuery)->where('status', IncidentStatus::Resolved)->count(),
+            'rejected' => (clone $incidentQuery)->where('status', IncidentStatus::Rejected)->count(),
         ];
 
         // Incidents by type
         $incidentsByType = (clone $incidentQuery)->selectRaw('incident_type, COUNT(*) as count')
             ->groupBy('incident_type')
             ->get()
-            ->pluck('count', 'incident_type')
+            // Keyed by the stored value: incident_type is cast to an enum, and an
+            // enum instance cannot be used as an array key.
+            ->mapWithKeys(fn ($row) => [$row->incident_type->value => $row->count])
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = ['Pending', 'In Progress', 'Resolved', 'Rejected'];
+        // Keyed by the stored value: an enum instance cannot be an array key.
         $incidentsByStatus = [];
-        foreach ($possibleStatuses as $status) {
-            $incidentsByStatus[$status] = (clone $incidentQuery)->where('status', $status)->count();
+        foreach (IncidentStatus::cases() as $status) {
+            $incidentsByStatus[$status->value] = (clone $incidentQuery)
+                ->where('status', $status)
+                ->count();
         }
 
         // Monthly incidents for the last 12 months (or filtered period if shorter)
@@ -108,7 +113,7 @@ class AdminAnalyticsController extends Controller
         $policePerformance = User::where('role', 'police')
             ->with('municipality')
             ->withCount(['assignedIncidents as resolved_count' => function ($query) {
-                $query->where('status', 'Resolved');
+                $query->where('status', IncidentStatus::Resolved);
             }])
             ->withCount(['assignedIncidents as total_assigned'])
             ->get()

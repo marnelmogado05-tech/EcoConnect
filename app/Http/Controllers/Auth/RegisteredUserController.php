@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\IdCardStorage;
@@ -107,8 +109,8 @@ class RegisteredUserController extends Controller
 
         // Set explicitly rather than relying on a column default, so the account is
         // immediately visible to the notification listeners that filter on status.
-        $userData['role'] = 'user';
-        $userData['status'] = 'Active';
+        $userData['role'] = UserRole::Citizen;
+        $userData['status'] = UserStatus::Active;
 
         $user = User::create($userData);
 

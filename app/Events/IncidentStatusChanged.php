@@ -2,6 +2,7 @@
 
 namespace App\Events;
 
+use App\Enums\IncidentStatus;
 use App\Models\Incident;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -13,15 +14,11 @@ class IncidentStatusChanged
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public Incident $incident;
-    public string $oldStatus;
-    public string $newStatus;
-
-    public function __construct(Incident $incident, string $oldStatus, string $newStatus)
-    {
-        $this->incident = $incident;
-        $this->oldStatus = $oldStatus;
-        $this->newStatus = $newStatus;
+    public function __construct(
+        public Incident $incident,
+        public ?IncidentStatus $oldStatus,
+        public ?IncidentStatus $newStatus,
+    ) {
     }
 
     public function broadcastOn(): array

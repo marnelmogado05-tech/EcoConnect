@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\FcmToken;
+use App\Models\PushSubscription;
 use Minishlink\WebPush\WebPush;
 use Minishlink\WebPush\Subscription;
 use Illuminate\Support\Facades\Log;
@@ -30,8 +30,8 @@ class WebPushNotificationService
             return $this->webPush;
         }
 
-        $publicKey = config('firebase.vapid_public_key');
-        $privateKey = config('firebase.vapid_private_key');
+        $publicKey = config('webpush.vapid.public_key');
+        $privateKey = config('webpush.vapid.private_key');
 
         if (blank($publicKey) || blank($privateKey)) {
             Log::warning('Web push is not configured (VAPID keys absent); skipping notification.');
@@ -41,7 +41,7 @@ class WebPushNotificationService
 
         return $this->webPush = new WebPush([
             'VAPID' => [
-                'subject' => config('app.url'),
+                'subject' => config('webpush.vapid.subject'),
                 'publicKey' => $publicKey,
                 'privateKey' => $privateKey,
             ],
@@ -57,26 +57,25 @@ class WebPushNotificationService
             return false;
         }
 
-        $tokens = FcmToken::where('user_id', $userId)
-            ->where('is_active', true)
-            ->get();
+        $subscriptions = PushSubscription::activeFor($userId)->get();
 
-        if ($tokens->isEmpty()) {
-            Log::warning('No web push tokens found for user', ['user_id' => $userId]);
+        if ($subscriptions->isEmpty()) {
+            Log::warning('No push subscriptions found for user', ['user_id' => $userId]);
+
             return false;
         }
 
         $successCount = 0;
 
-        foreach ($tokens as $token) {
-            if ($this->sendToToken($token, $title, $body, $data)) {
+        foreach ($subscriptions as $subscription) {
+            if ($this->sendToToken($subscription, $title, $body, $data)) {
                 $successCount++;
             }
         }
 
         Log::info('Web push notifications sent', [
             'user_id' => $userId,
-            'total' => $tokens->count(),
+            'total' => $subscriptions->count(),
             'sent' => $successCount,
         ]);
 
@@ -96,9 +95,9 @@ class WebPushNotificationService
 
         try {
             // Parse the subscription token (it's stored as JSON)
-            $subscriptionData = is_string($token->token)
-                ? json_decode($token->token, true)
-                : $token->token;
+            $subscriptionData = is_string($token->subscription)
+                ? json_decode($token->subscription, true)
+                : $token->subscription;
 
             if (!isset($subscriptionData['endpoint'])) {
                 Log::warning('Invalid subscription data', ['token_id' => $token->id]);

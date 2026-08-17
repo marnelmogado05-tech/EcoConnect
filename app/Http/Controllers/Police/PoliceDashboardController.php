@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Police;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Incident;
@@ -17,9 +18,9 @@ class PoliceDashboardController extends Controller
         // Get statistics for the authenticated user
         $stats = [
             'total' => Incident::where('assigned_to', $userId)->count(),
-            'pending' => Incident::where('assigned_to', $userId)->where('status', 'Pending')->count(),
-            'in_progress' => Incident::where('assigned_to', $userId)->where('status', 'In Progress')->count(),
-            'resolved' => Incident::where('assigned_to', $userId)->where('status', 'Resolved')->count(),
+            'pending' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Resolved)->count(),
         ];
 
         // Get recent incidents (last 5)
@@ -33,14 +34,19 @@ class PoliceDashboardController extends Controller
         $incidentsByType = Incident::where('assigned_to', $userId)
             ->select('incident_type', DB::raw('count(*) as count'))
             ->groupBy('incident_type')
-            ->pluck('count', 'incident_type')
+            ->get()
+            // Keyed by the stored value: incident_type is cast to an enum, and an
+            // enum instance cannot be used as an array key.
+            ->mapWithKeys(fn ($row) => [$row->incident_type->value => $row->count])
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = ['Pending', 'In Progress', 'Resolved'];
+        // Keyed by the stored value: an enum instance cannot be an array key.
         $incidentsByStatus = [];
-        foreach ($possibleStatuses as $status) {
-            $incidentsByStatus[$status] = Incident::where('assigned_to', $userId)->where('status', $status)->count();
+        foreach (IncidentStatus::cases() as $status) {
+            $incidentsByStatus[$status->value] = Incident::where('assigned_to', $userId)
+                ->where('status', $status)
+                ->count();
         }
 
         // Monthly incidents last 12 months
@@ -53,7 +59,7 @@ class PoliceDashboardController extends Controller
             ->toArray();
 
         // Avg resolution time for resolved incidents
-        $resolvedIncidents = Incident::where('assigned_to', $userId)->where('status', 'Resolved')->get();
+        $resolvedIncidents = Incident::where('assigned_to', $userId)->where('status', IncidentStatus::Resolved)->get();
         $avgResolutionTime = 0;
         if ($resolvedIncidents->count() > 0) {
             $totalDays = 0;

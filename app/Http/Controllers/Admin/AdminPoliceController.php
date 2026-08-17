@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,13 +26,13 @@ class AdminPoliceController extends Controller
                     ->withCount([
                         'assignedIncidents as total_assigned_reports',
                         'assignedIncidents as not_yet_responded_reports' => function($q) {
-                            $q->where('status', 'Assigned');
+                            $q->where('status', IncidentStatus::Assigned);
                         },
                         'assignedIncidents as in_progress_reports' => function($q) {
-                            $q->where('status', 'In Progress');
+                            $q->where('status', IncidentStatus::InProgress);
                         },
                         'assignedIncidents as resolved_reports' => function($q) {
-                            $q->where('status', 'Resolved');
+                            $q->where('status', IncidentStatus::Resolved);
                         }
                     ]);
 
@@ -54,27 +56,27 @@ class AdminPoliceController extends Controller
         // Get overall statistics for police
         $stats = [
             'total' => User::where('role', 'police')->count(),
-            'active' => User::where('role', 'police')->where('status', 'Active')->count(),
-            'suspended' => User::where('role', 'police')->where('status', 'Suspended')->count(),
+            'active' => User::where('role', 'police')->where('status', UserStatus::Active)->count(),
+            'suspended' => User::where('role', 'police')->where('status', UserStatus::Suspended)->count(),
             'assigned_reports' => \App\Models\Incident::whereNotNull('assigned_to')
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'police');
                                         })
                                         ->count(),
             'not_yet_responded_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                        ->where('status', 'Assigned')
+                                        ->where('status', IncidentStatus::Assigned)
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'police');
                                         })
                                         ->count(),
             'in_progress_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                        ->where('status', 'In Progress')
+                                        ->where('status', IncidentStatus::InProgress)
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'police');
                                         })
                                         ->count(),
             'resolved_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                    ->where('status', 'Resolved')
+                                    ->where('status', IncidentStatus::Resolved)
                                     ->whereHas('assignedTo', function($q) {
                                         $q->where('role', 'police');
                                     })
@@ -98,10 +100,10 @@ class AdminPoliceController extends Controller
         $police = User::where('role', 'police')
                     ->withCount(['assignedIncidents as total_reports',
                                 'assignedIncidents as in_progress_reports' => function($q) {
-                                    $q->where('status', 'In Progress');
+                                    $q->where('status', IncidentStatus::InProgress);
                                 },
                                 'assignedIncidents as resolved_reports' => function($q) {
-                                    $q->where('status', 'Resolved');
+                                    $q->where('status', IncidentStatus::Resolved);
                                 }])
                     ->with(['assignedIncidents' => function($q) {
                         $q->with(['user'])
@@ -161,7 +163,7 @@ class AdminPoliceController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'police',
-            'status' => 'Active',
+            'status' => UserStatus::Active,
         ]);
 
         return redirect()->route('admin.police')->with('success', "Police Officer added successfully.");

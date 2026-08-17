@@ -163,13 +163,13 @@
             <div class="incident-details">
                 <h3>📋 Incident Details</h3>
                 <p><strong>Reference Number:</strong> {{ $incident->reference_number }}</p>
-                <p><strong>Incident Type:</strong> {{ $incident->incident_type }}</p>
+                <p><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</p>
                 <p><strong>Priority:</strong> 
-                    <span class="status-badge">{{ $incident->priority }}</span>
+                    <span class="status-badge">{{ $incident->priority?->value }}</span>
                 </p>
                 <p><strong>Current Status:</strong> 
-                    <span class="status-badge {{ strtolower(str_replace(' ', '-', $incident->status)) }}">
-                        {{ $incident->status }}
+                    <span class="status-badge {{ strtolower(str_replace(' ', '-', $incident->status?->value ?? '')) }}">
+                        {{ $incident->status?->value }}
                     </span>
                 </p>
                 <p><strong>Date & Time Reported:</strong> {{ $incident->created_at->format('F j, Y g:i A') }}</p>

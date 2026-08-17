@@ -2,7 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\Incident;
+use App\Enums\IncidentPriority;
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,26 +22,26 @@ class IncidentFactory extends Factory
      */
     public function definition(): array
     {
-        $type = fake()->randomElement(array_keys(Incident::getIncidentTypes()));
+        $type = fake()->randomElement(IncidentType::cases());
 
         return [
             'user_id' => User::factory(),
-            'title' => $type.' - '.fake()->dateTime()->format('M j, Y g:i A'),
+            'title' => $type->value.' - '.fake()->dateTime()->format('M j, Y g:i A'),
             'incident_type' => $type,
             'description' => fake()->paragraph(),
             'incident_date' => now()->toDateString(),
             'incident_time' => now()->format('H:i:s'),
-            'status' => Incident::STATUS_PENDING,
-            'priority' => Incident::PRIORITY_NORMAL,
+            'status' => IncidentStatus::Pending,
+            'priority' => IncidentPriority::Normal,
         ];
     }
 
-    public function status(string $status): static
+    public function status(IncidentStatus $status): static
     {
         return $this->state(fn (array $attributes) => ['status' => $status]);
     }
 
-    public function priority(string $priority): static
+    public function priority(IncidentPriority $priority): static
     {
         return $this->state(fn (array $attributes) => ['priority' => $priority]);
     }
@@ -52,7 +54,7 @@ class IncidentFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'assigned_to' => $officer->id,
             'assigned_at' => now(),
-            'status' => 'Assigned',
+            'status' => IncidentStatus::Assigned,
         ]);
     }
 }

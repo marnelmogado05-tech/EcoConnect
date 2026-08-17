@@ -181,7 +181,7 @@
             <div class="incident-details">
                 <h3>📊 Resolution Summary</h3>
                 <p><strong>Reference Number:</strong> {{ $incident->reference_number }}</p>
-                <p><strong>Incident Type:</strong> {{ $incident->incident_type }}</p>
+                <p><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</p>
                 <p><strong>Final Status:</strong> 
                     <span class="status-badge resolved">RESOLVED</span>
                 </p>
@@ -273,8 +273,8 @@
                 </div>
                 <div class="metric-card">
                     <div class="metric-value">
-                        @if($incident->priority == 'High') 48
-                        @elseif($incident->priority == 'Medium') 72
+                        @if($incident->priority?->value === 'High') 48
+                        @elseif($incident->priority?->value === 'Medium') 72
                         @else 96
                         @endif
                     </div>

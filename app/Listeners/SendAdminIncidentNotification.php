@@ -2,6 +2,7 @@
 
 namespace App\Listeners;
 
+use App\Enums\UserStatus;
 use App\Events\IncidentReported;
 use App\Jobs\SendPushNotification;
 use App\Models\User;
@@ -30,14 +31,14 @@ class SendAdminIncidentNotification implements ShouldQueue
 
         Log::info('SendAdminIncidentNotification: New incident reported', [
             'incident_id' => $incident->id,
-            'incident_type' => $incident->incident_type,
+            'incident_type' => $incident->incident_type?->value,
             'reporter' => $incident->user?->name ?: 'Unknown',
         ]);
 
         try {
             // Get all admins, police, and BFP staff who should be notified
             $admins = User::whereIn('role', ['admin', 'police', 'bfp'])
-                ->where('status', 'Active')
+                ->where('status', UserStatus::Active)
                 ->get();
 
             if ($admins->isEmpty()) {
@@ -50,12 +51,12 @@ class SendAdminIncidentNotification implements ShouldQueue
             // identifier staff actually work from.
             $title = '🚨 New Incident Reported';
             $reporter = $incident->user?->name ?: 'an anonymous reporter';
-            $body = "{$incident->incident_type} reported by {$reporter} ({$incident->reference_number})";
+            $body = "{$incident->incident_type?->value} reported by {$reporter} ({$incident->reference_number})";
             $data = [
                 'incident_id' => $incident->id,
-                'incident_type' => $incident->incident_type,
+                'incident_type' => $incident->incident_type?->value,
                 'reporter_id' => $incident->user_id,
-                'status' => $incident->status,
+                'status' => $incident->status?->value,
                 'type' => 'new_incident',
                 'reference_number' => $incident->reference_number,
             ];

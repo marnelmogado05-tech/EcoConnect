@@ -32,8 +32,8 @@
                                 {{ strtoupper(substr($citizen->fname, 0, 1)) }}{{ strtoupper(substr($citizen->lname, 0, 1)) }}
                             </div>
                             <h4>{{ $citizen->fname }} {{ $citizen->lname }}</h4>
-                            <span class="badge {{ $citizen->status == 'Active' ? 'bg-success' : 'bg-danger' }} mb-3">
-                                {{ ucfirst($citizen->status) }}
+                            <span class="badge {{ $citizen->status?->value === 'Active' ? 'bg-success' : 'bg-danger' }} mb-3">
+                                {{ $citizen->status?->label() }}
                             </span>
 
                             <div class="mt-4 text-start">
@@ -148,14 +148,14 @@
                                             @foreach($recentIncidents as $incident)
                                             <tr>
                                                 <td>{{ $incident->reference_number }}</td>
-                                                <td>{{ $incident->incident_type }}</td>
+                                                <td>{{ $incident->incident_type?->value }}</td>
                                                 <td>
                                                     <span class="badge
-                                                        @if($incident->status == 'Resolved') bg-success
-                                                        @elseif($incident->status == 'In Progress') bg-primary
-                                                        @elseif($incident->status == 'Rejected') bg-danger
+                                                        @if($incident->status?->value === 'Resolved') bg-success
+                                                        @elseif($incident->status?->value === 'In Progress') bg-primary
+                                                        @elseif($incident->status?->value === 'Rejected') bg-danger
                                                         @else bg-secondary @endif">
-                                                        {{ $incident->status }}
+                                                        {{ $incident->status?->value }}
                                                     </span>
                                                 </td>
                                                 <td>{{ $incident->created_at->format('M j, Y') }}</td>
@@ -198,8 +198,8 @@
                         <div class="mb-3">
                             <label for="status" class="form-label">Account Status</label>
                             <select class="form-select" id="status" name="status" required>
-                                <option value="Active" {{ $citizen->status == 'Active' ? 'selected' : '' }}>Active</option>
-                                <option value="Suspended" {{ $citizen->status == 'Suspended' ? 'selected' : '' }}>Suspended</option>
+                                <option value="Active" {{ $citizen->status?->value === 'Active' ? 'selected' : '' }}>Active</option>
+                                <option value="Suspended" {{ $citizen->status?->value === 'Suspended' ? 'selected' : '' }}>Suspended</option>
                             </select>
                         </div>
                         <div class="alert alert-info">

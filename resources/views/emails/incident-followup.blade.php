@@ -103,8 +103,8 @@
             <div class="incident-details">
                 <p><strong>Reference Number:</strong></p>
                 <div class="reference-number">{{ $incident->reference_number }}</div>
-                <p><strong>Incident Type:</strong> {{ $incident->incident_type }}</p>
-                <p><strong>Status:</strong> {{ $incident->status }}</p>
+                <p><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</p>
+                <p><strong>Status:</strong> {{ $incident->status?->value }}</p>
                 <p><strong>Reported by:</strong> {{ $incident->user->name ?? 'Unknown' }}</p>
             </div>
 

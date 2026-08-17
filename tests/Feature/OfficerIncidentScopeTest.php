@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IncidentStatus;
 use App\Models\Incident;
 use App\Models\User;
 
@@ -19,7 +20,7 @@ test('police statistics count only that officer\'s own assignments', function ()
     $theirs = User::factory()->police()->create(['status' => 'Active']);
 
     Incident::factory()->count(2)->assignedTo($mine)->create();
-    Incident::factory()->assignedTo($mine)->create(['status' => 'Resolved']);
+    Incident::factory()->assignedTo($mine)->create(['status' => IncidentStatus::Resolved]);
     Incident::factory()->count(5)->assignedTo($theirs)->create();
     Incident::factory()->count(3)->create(); // unassigned
 

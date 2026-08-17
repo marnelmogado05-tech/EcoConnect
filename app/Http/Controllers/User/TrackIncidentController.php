@@ -64,9 +64,9 @@ class TrackIncidentController extends Controller
     {
         return [
             'reference_number' => $incident->reference_number,
-            'incident_type' => $incident->incident_type,
-            'status' => $incident->status,
-            'priority' => $incident->priority,
+            'incident_type' => $incident->incident_type?->value,
+            'status' => $incident->status?->value,
+            'priority' => $incident->priority?->value,
             'incident_date' => $incident->incident_date?->format('Y-m-d'),
             'reported_at' => $incident->created_at?->format('Y-m-d'),
             'resolved_date' => $incident->resolved_date?->format('Y-m-d'),
