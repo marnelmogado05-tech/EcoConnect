@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IncidentStatus;
 use App\Models\Incident;
 use App\Models\IncidentFollowup;
 use App\Models\User;
@@ -130,7 +131,7 @@ test('an officer cannot take action on an incident assigned to someone else', fu
         ])
         ->assertForbidden();
 
-    expect($incident->refresh()->status)->toBe('Assigned');
+    expect($incident->refresh()->status)->toBe(IncidentStatus::Assigned);
 });
 
 test('an officer can take action on their own assignment', function () {
@@ -143,7 +144,7 @@ test('an officer can take action on their own assignment', function () {
         ])
         ->assertRedirect();
 
-    expect($incident->refresh()->status)->toBe('In Progress');
+    expect($incident->refresh()->status)->toBe(IncidentStatus::InProgress);
 });
 
 test('only an admin can assign, resolve or reject', function (string $role) {
@@ -156,7 +157,7 @@ test('only an admin can assign, resolve or reject', function (string $role) {
         ->put("/admin/incidents/reject/{$incident->id}", ['rejection_reason' => 'no'])
         ->assertForbidden();
 
-    expect($incident->refresh()->status)->toBe('Pending');
+    expect($incident->refresh()->status)->toBe(IncidentStatus::Pending);
 })->with(['user', 'police', 'bfp']);
 
 // ---------------------------------------------------------------- ID cards

@@ -4,10 +4,13 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Events\UserRegistered;
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use App\Policies\UserPolicy;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -59,6 +62,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => UserRole::class,
+            'status' => UserStatus::class,
         ];
     }
 
@@ -71,7 +76,7 @@ class User extends Authenticatable
 
         static::created(function ($user) {
             // Only dispatch event for regular users, not for admins/staff created via admin panel
-            if ($user->role === 'user') {
+            if ($user->role === UserRole::Citizen) {
                 UserRegistered::dispatch($user);
             }
         });
@@ -99,40 +104,41 @@ class User extends Authenticatable
         return $this->hasMany(Incident::class, 'user_id');
     }
 
+    /**
+     * These four were each an if/else around a boolean expression comparing a magic
+     * string. With the role cast to an enum they collapse to one comparison apiece.
+     */
+    public function hasRole(UserRole $role): bool
+    {
+        return $this->role === $role;
+    }
+
     public function isAdmin(): bool
     {
-        if($this->role === 'admin'){
-            return true;
-        } else {
-            return false;
-        }
+        return $this->hasRole(UserRole::Admin);
     }
 
     public function isPolice(): bool
     {
-        if($this->role === 'police'){
-            return true;
-        } else {
-            return false;
-        }
+        return $this->hasRole(UserRole::Police);
     }
 
     public function isBFP(): bool
     {
-        if($this->role === 'bfp'){
-            return true;
-        } else {
-            return false;
-        }
+        return $this->hasRole(UserRole::Bfp);
     }
 
     public function isUser(): bool
     {
-        if($this->role === 'user'){
-            return true;
-        } else {
-            return false;
-        }
+        return $this->hasRole(UserRole::Citizen);
+    }
+
+    /**
+     * Police and BFP accounts, which act on incidents assigned to them.
+     */
+    public function isResponder(): bool
+    {
+        return $this->role?->isResponder() ?? false;
     }
 
     public function barangay()
@@ -150,8 +156,8 @@ class User extends Authenticatable
         return $this->hasMany(Incident::class, 'assigned_to');
     }
 
-    public function fcmTokens()
+    public function pushSubscriptions(): HasMany
     {
-        return $this->hasMany(FcmToken::class);
+        return $this->hasMany(PushSubscription::class);
     }
 }

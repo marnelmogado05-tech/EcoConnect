@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\IncidentStatus;
 use App\Models\Incident;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,7 @@ function seedIncidentsFor(?User $officer = null): void
 
     if ($officer) {
         Incident::factory()->count(2)->assignedTo($officer)->create();
-        Incident::factory()->assignedTo($officer)->create(['status' => 'Resolved']);
+        Incident::factory()->assignedTo($officer)->create(['status' => IncidentStatus::Resolved]);
     }
 }
 

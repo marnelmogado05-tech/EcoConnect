@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Enums\IncidentStatus;
 use App\Events\IncidentStatusChanged;
 use App\Models\Incident;
 
@@ -33,10 +34,12 @@ class IncidentObserver
             return;
         }
 
+        // getOriginal() applies casts, so this is already an IncidentStatus —
+        // getRawOriginal() is the one that returns the stored string.
         IncidentStatusChanged::dispatch(
             $incident,
-            (string) $incident->getOriginal('status'),
-            (string) $incident->status,
+            $incident->getOriginal('status'),
+            $incident->status,
         );
     }
 }

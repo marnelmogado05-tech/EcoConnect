@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\UserStatus;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -35,7 +36,7 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'role' => 'user',
-            'status' => 'Active',
+            'status' => UserStatus::Active,
             'municipality_id' => null,
             'barangay_id' => null,
             'remember_token' => Str::random(10),
@@ -58,7 +59,7 @@ class UserFactory extends Factory
     public function suspended(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'Suspended',
+            'status' => UserStatus::Suspended,
         ]);
     }
 

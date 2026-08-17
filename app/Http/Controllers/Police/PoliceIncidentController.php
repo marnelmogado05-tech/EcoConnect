@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Police;
 
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
 use App\Http\Controllers\Controller;
+use App\Services\IncidentWorkflowService;
 use Illuminate\Http\Request;
+use RuntimeException;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Incident;
@@ -72,76 +76,29 @@ class PoliceIncidentController extends Controller
 
         $stats = [
             'total' => (clone $statsQuery)->count(),
-            'assigned' => (clone $statsQuery)->where('status', 'Assigned')->count(),
-            'in_progress' => (clone $statsQuery)->where('status', 'In Progress')->count(),
-            'resolved' => (clone $statsQuery)->where('status', 'Resolved')->count(),
-            'rejected' => (clone $statsQuery)->where('status', 'Rejected')->count(),
-            'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
+            'assigned' => (clone $statsQuery)->where('status', IncidentStatus::Assigned)->count(),
+            'in_progress' => (clone $statsQuery)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => (clone $statsQuery)->where('status', IncidentStatus::Resolved)->count(),
+            'rejected' => (clone $statsQuery)->where('status', IncidentStatus::Rejected)->count(),
+            'pending' => (clone $statsQuery)->where('status', IncidentStatus::Pending)->count(),
         ];
 
-        // Badge classes for status and priority
-        $statusBadgeClasses = [
-            'Pending' => 'bg-warning',
-            'In Progress' => 'bg-info',
-            'Resolved' => 'bg-success',
-            'Rejected' => 'bg-danger',
-            'Assigned' => 'bg-primary',
-        ];
-
-        $priorityBadgeClasses = [
-            'Normal' => 'bg-secondary',
-            'High' => 'bg-warning',
-            'Urgent' => 'bg-danger'
-        ];
-
-        // Incident type mapping (for display purposes)
-        $incidentTypes = [
-            'Illegal Logging' => 'Illegal Logging',
-            'Pollution' => 'Pollution',
-            'Wildlife Crime' => 'Wildlife Crime',
-            'Illegal Waste Disposal' => 'Illegal Waste Disposal',
-            'Other' => 'Other'
-        ];
+        // Badge classes come from the enums; the views ask the value for its own class.
+        $incidentTypes = IncidentType::options();
 
         return view('police.incidents', compact(
             'incidents',
             'stats',
-            'statusBadgeClasses',
-            'priorityBadgeClasses',
             'incidentTypes',
         ));
     }
 
-    // public function resolve(Request $request, $id)
-    // {
-    //     $incident = Incident::findOrFail($id);
+    /*
+     * A commented-out resolve() sat here. Resolution is an admin action; officers take
+     * incidents into action. Version control is the archive for the old body.
+     */
 
-    //     // For reject method
-    //     $validated = $request->validate([
-    //         'resolution_details' => 'required|string'
-    //     ]);
-
-    //     try {
-    //         // Store previous status for logging
-    //         $previousStatus = $incident->status;
-
-    //         $incident->update([
-    //             'status' => 'In Progress',
-    //             'resolution_details' => $validated['resolution_details'],
-    //             'date_taken_into_action' => now(),
-    //         ]);
-
-    //         Mail::to($incident->user->email)->send(new IncidentResolvedMail($incident, $incident->user));
-
-    //         return redirect()->back()->with('success', 'Incident successfully resolved.');
-
-    //     } catch (\Exception $e) {
-    //         Log::error('Error resolving incident: ' . $e->getMessage());
-    //         return redirect()->back()->with('error', 'Failed to resolve incident. Please try again.');
-    //     }
-    // }
-
-    public function taken(Request $request, $id)
+    public function taken(Request $request, IncidentWorkflowService $workflow, $id)
     {
         $incident = Incident::findOrFail($id);
 
@@ -150,7 +107,6 @@ class PoliceIncidentController extends Controller
         // id in the URL. The route's 'police' middleware only established the role.
         $this->authorize('takeAction', $incident);
 
-        // Validate documentation notes
         $validated = $request->validate([
             'resolution_details' => 'required|string|min:10',
             'evidence_images' => 'sometimes|array',
@@ -158,69 +114,24 @@ class PoliceIncidentController extends Controller
         ]);
 
         try {
-            // Store previous status for logging
-            $previousStatus = $incident->status;
-
-            // Count uploaded evidence
-            $evidenceCount = 0;
-
-            // Handle image uploads
-            if ($request->hasFile('evidence_images')) {
-                foreach ($request->file('evidence_images') as $image) {
-                    if ($image->isValid()) {
-                        // Store image with custom path structure
-                        $path = $image->store(
-                            'incidents/' . $incident->reference_number,
-                            'public'
-                        );
-
-                        // Create media evidence record
-                        $incident->mediaEvidence()->create([
-                            'file_path' => $path,
-                            'file_name' => $image->getClientOriginalName(),
-                            'mime_type' => $image->getMimeType(),
-                            'file_size' => $image->getSize(),
-                        ]);
-
-                        $evidenceCount++;
-                    }
-                }
-            }
-
-            // Update the incident to mark as taken
-            $incident->update([
-                'status' => 'In Progress',
-                'resolution_details' => $validated['resolution_details'],
-                'date_taken_into_action' => now(),
-            ]);
-
-            // Create or update acknowledgement record
-            $acknowledgement = IncidentAcknowledgement::updateOrCreate(
-                [
-                    'incident_id' => $incident->id,
-                    'officer_id' => auth()->user()->id,
-                ],
-                [
-                    'acknowledged_at' => now(),
-                    'documentation' => $validated['resolution_details'],
-                    'evidence_count' => $evidenceCount,
-                ]
+            $evidenceCount = $workflow->attachEvidence(
+                $incident,
+                $request->file('evidence_images') ?? []
             );
 
-            // Send acknowledgement receipt to officer
-            Mail::to(Auth::user()->email)->send(
-                new DocumentationAcknowledgementMail($incident, Auth::user(), $acknowledgement)
+            $workflow->takeAction(
+                $incident,
+                Auth::user(),
+                $validated['resolution_details'],
+                $evidenceCount,
             );
-
-            // Send notification to reporter
-            // Mail::to($incident->user->email)->send(
-            //     new IncidentResolvedMail($incident, $incident->user)
-            // );
 
             return redirect()->back()->with('success', 'Incident successfully taken into action. Acknowledgement receipt sent to your email.');
-
+        } catch (RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
-            Log::error('Error taking incident into action: ' . $e->getMessage());
+            Log::error('Error taking incident into action: '.$e->getMessage());
+
             return redirect()->back()->with('error', 'Failed to take action on incident. Please try again.');
         }
     }

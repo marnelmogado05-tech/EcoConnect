@@ -25,10 +25,10 @@ class SendIncidentStatusNotification implements ShouldQueue
         $user = $incident->user;
 
         $title = 'Incident Status Updated';
-        $body = "Your incident report status has been changed to: {$incident->status}";
+        $body = "Your incident report status has been changed to: {$incident->status?->label()}";
         $data = [
             'incident_id' => $incident->id,
-            'status' => $incident->status,
+            'status' => $incident->status?->value,
             'type' => 'incident_status_change',
         ];
 

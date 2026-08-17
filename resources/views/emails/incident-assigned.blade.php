@@ -168,9 +168,9 @@
             <div class="incident-details">
                 <h3>🚨 Incident Details</h3>
                 <p><strong>Reference Number:</strong> {{ $incident->reference_number }}</p>
-                <p><strong>Incident Type:</strong> {{ $incident->incident_type }}</p>
+                <p><strong>Incident Type:</strong> {{ $incident->incident_type?->value }}</p>
                 <p><strong>Priority Level:</strong> 
-                    <span class="status-badge {{ strtolower($incident->priority) }}">{{ $incident->priority }}</span>
+                    <span class="status-badge {{ strtolower($incident->priority?->value ?? '') }}">{{ $incident->priority?->value }}</span>
                 </p>
                 <p><strong>Current Status:</strong> 
                     <span class="status-badge assigned">Assigned</span>
@@ -197,7 +197,7 @@
                 @endif
             </div>
 
-            @if($incident->priority == 'High')
+            @if($incident->priority?->value === 'High')
             <div class="urgency-indicator">
                 <h3>🚨 URGENT ACTION REQUIRED</h3>
                 <p>This incident has been marked as <strong>HIGH PRIORITY</strong> and requires immediate attention due to potential environmental impact.</p>

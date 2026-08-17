@@ -38,7 +38,8 @@ class EnsureUserHasRole
                 : redirect()->guest(route('login'));
         }
 
-        if (! in_array($user->role, $roles, true)) {
+        // Roles arrive from the route definition as strings; the model casts to an enum.
+        if (! in_array($user->role?->value, $roles, true)) {
             abort(403);
         }
 

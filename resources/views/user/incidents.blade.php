@@ -142,7 +142,7 @@
                         </div>
 
                         @foreach($incidents as $incident)
-                            <div class="card incident-card mb-3 {{ strtolower(str_replace(' ', '-', $incident->status)) }} shadow-sm" style="border-radius: 15px; overflow: hidden;">
+                            <div class="card incident-card mb-3 {{ strtolower(str_replace(' ', '-', $incident->status?->value ?? '')) }} shadow-sm" style="border-radius: 15px; overflow: hidden;">
                                 <div class="p-3 card-body p-md-4">
                                     <div class="row align-items-start">
                                         <div class="mb-3 col-12 col-md-8 mb-md-0">
@@ -159,14 +159,14 @@
                                                 </div>
                                             </div>
                                             <div class="flex-wrap gap-2 mb-3 d-flex">
-                                                <span class="badge {{ $statusBadgeClasses[$incident->status] }} status-badge fw-semibold px-3 py-2" style="font-size: 0.75rem; border-radius: 20px;">
-                                                    {{ $incident->status }}
+                                                <span class="badge {{ $incident->status?->badgeClass() }} status-badge fw-semibold px-3 py-2" style="font-size: 0.75rem; border-radius: 20px;">
+                                                    {{ $incident->status?->value }}
                                                 </span>
                                                 <span class="px-3 py-2 badge bg-secondary status-badge fw-semibold" style="font-size: 0.75rem; border-radius: 20px;">
-                                                    {{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}
+                                                    {{ $incident->incident_type?->label() }}
                                                 </span>
-                                                <span class="badge {{ $priorityBadgeClasses[$incident->priority] }} status-badge fw-semibold px-3 py-2" style="font-size: 0.75rem; border-radius: 20px;">
-                                                    <i class="fas fa-flag me-1"></i> {{ $incident->priority }}
+                                                <span class="badge {{ $incident->priority?->badgeClass() }} status-badge fw-semibold px-3 py-2" style="font-size: 0.75rem; border-radius: 20px;">
+                                                    <i class="fas fa-flag me-1"></i> {{ $incident->priority?->value }}
                                                 </span>
                                                 @if($incident->mediaEvidence->count() > 0)
                                                     <span class="px-3 py-2 badge bg-info status-badge fw-semibold" style="font-size: 0.75rem; border-radius: 20px;">
@@ -231,8 +231,8 @@
                                                         <h6 class="mb-2 text-muted">
                                                             <i class="fas fa-tasks me-1"></i>Status
                                                         </h6>
-                                                        <span class="badge {{ $statusBadgeClasses[$incident->status] }} fs-6 px-3 py-2">
-                                                            {{ $incident->status }}
+                                                        <span class="badge {{ $incident->status?->badgeClass() }} fs-6 px-3 py-2">
+                                                            {{ $incident->status?->value }}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -241,7 +241,7 @@
                                                         <h6 class="mb-2 text-muted">
                                                             <i class="fas fa-tag me-1"></i>Incident Type
                                                         </h6>
-                                                        <p class="mb-0 fw-semibold">{{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}</p>
+                                                        <p class="mb-0 fw-semibold">{{ $incident->incident_type?->label() }}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -252,8 +252,8 @@
                                                         <h6 class="mb-2 text-muted">
                                                             <i class="fas fa-flag me-1"></i>Priority
                                                         </h6>
-                                                        <span class="badge {{ $priorityBadgeClasses[$incident->priority] }} fs-6 px-3 py-2">
-                                                            {{ $incident->priority }}
+                                                        <span class="badge {{ $incident->priority?->badgeClass() }} fs-6 px-3 py-2">
+                                                            {{ $incident->priority?->value }}
                                                         </span>
                                                     </div>
                                                 </div>

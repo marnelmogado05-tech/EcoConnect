@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Incident;
@@ -40,10 +41,10 @@ class AdminAnalyticsController extends Controller
         // Incident statistics
         $incidentStats = [
             'total' => (clone $incidentQuery)->count(),
-            'pending' => (clone $incidentQuery)->where('status', 'Pending')->count(),
-            'in_progress' => (clone $incidentQuery)->where('status', 'In Progress')->count(),
-            'resolved' => (clone $incidentQuery)->where('status', 'Resolved')->count(),
-            'rejected' => (clone $incidentQuery)->where('status', 'Rejected')->count(),
+            'pending' => (clone $incidentQuery)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => (clone $incidentQuery)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => (clone $incidentQuery)->where('status', IncidentStatus::Resolved)->count(),
+            'rejected' => (clone $incidentQuery)->where('status', IncidentStatus::Rejected)->count(),
         ];
 
         // Incidents by type
@@ -54,8 +55,8 @@ class AdminAnalyticsController extends Controller
             ->toArray();
 
         // Incidents by status - include all statuses even if 0
-        $possibleStatuses = ['Pending', 'In Progress', 'Resolved', 'Rejected'];
-        $incidentsByStatus = [];
+        $possibleStatuses = IncidentStatus::cases();
+        $incidentsByStatus = IncidentStatus::cases();
         foreach ($possibleStatuses as $status) {
             $incidentsByStatus[$status] = (clone $incidentQuery)->where('status', $status)->count();
         }
@@ -108,7 +109,7 @@ class AdminAnalyticsController extends Controller
         $policePerformance = User::where('role', 'police')
             ->with('municipality')
             ->withCount(['assignedIncidents as resolved_count' => function ($query) {
-                $query->where('status', 'Resolved');
+                $query->where('status', IncidentStatus::Resolved);
             }])
             ->withCount(['assignedIncidents as total_assigned'])
             ->get()

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\IncidentStatus;
 use Illuminate\Console\Command;
 use App\Models\Incident;
 use App\Mail\IncidentRejectedMail;
@@ -45,7 +46,7 @@ class AutoRejectPendingIncidents extends Command
         $this->info("Finding pending incidents older than {$gracePeriodDays} days (before {$cutoffDate->format('Y-m-d H:i:s')})");
 
         // Get count first to avoid loading all records into memory
-        $totalPendingIncidents = Incident::where('status', 'Pending')
+        $totalPendingIncidents = Incident::where('status', IncidentStatus::Pending)
             ->where('created_at', '<', $cutoffDate)
             ->count();
 
@@ -63,7 +64,7 @@ class AutoRejectPendingIncidents extends Command
         $errors = 0;
 
         // Use chunk() instead of skip/take - much more memory efficient
-        Incident::where('status', 'Pending')
+        Incident::where('status', IncidentStatus::Pending)
             ->where('created_at', '<', $cutoffDate)
             ->select('id', 'reference_number', 'status', 'created_at', 'user_id')
             ->with('user:id,email,fname,lname')
@@ -80,7 +81,7 @@ class AutoRejectPendingIncidents extends Command
 
                         // Update the incident
                         $incident->update([
-                            'status' => 'Rejected',
+                            'status' => IncidentStatus::Rejected,
                             'rejection_reason' => $autoRejectReason,
                             'assigned_to' => null,
                         ]);

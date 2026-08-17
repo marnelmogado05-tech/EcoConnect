@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\User;
 
+use App\Enums\IncidentPriority;
+use App\Enums\IncidentStatus;
+use App\Enums\IncidentType;
+use App\Enums\UserStatus;
 use App\Models\Incident;
 use App\Http\Controllers\Controller;
 use App\Models\MediaEvidence;
@@ -35,7 +39,7 @@ class UserIncidentController extends Controller
         // lookups it was never rescued by a case-insensitive collation. Suspended accounts
         // could file reports as normal.
         $user = Auth::user();
-        if ($user->status === 'Suspended') {
+        if ($user->status === UserStatus::Suspended) {
             return response()->json([
                 'error' => 'Your account is suspended. You cannot report new incidents.'
             ], 403);
@@ -87,8 +91,8 @@ class UserIncidentController extends Controller
                 'description' => $validated['description'],
                 'incident_date' => Carbon::now()->format('Y-m-d'),
                 'incident_time' => Carbon::now()->format('H:i:s'),
-                'status' => Incident::STATUS_PENDING,
-                'priority' => Incident::PRIORITY_NORMAL,
+                'status' => IncidentStatus::Pending,
+                'priority' => IncidentPriority::Normal,
             ]);
 
             // Dispatch event to notify admins about new incident
@@ -370,40 +374,19 @@ class UserIncidentController extends Controller
 
         $stats = [
             'total' => $statsQuery->count(),
-            'pending' => (clone $statsQuery)->where('status', 'Pending')->count(),
-            'in_progress' => (clone $statsQuery)->where('status', 'In Progress')->count(),
-            'resolved' => (clone $statsQuery)->where('status', 'Resolved')->count(),
+            'pending' => (clone $statsQuery)->where('status', IncidentStatus::Pending)->count(),
+            'in_progress' => (clone $statsQuery)->where('status', IncidentStatus::InProgress)->count(),
+            'resolved' => (clone $statsQuery)->where('status', IncidentStatus::Resolved)->count(),
         ];
 
-        // Badge classes for status and priority
-        $statusBadgeClasses = [
-            'Pending' => 'bg-warning',
-            'Assigned' => 'bg-primary',
-            'In Progress' => 'bg-info',
-            'Resolved' => 'bg-success',
-            'Rejected' => 'bg-danger'
-        ];
-
-        $priorityBadgeClasses = [
-            'Normal' => 'bg-secondary',
-            'High' => 'bg-warning',
-            'Urgent' => 'bg-danger'
-        ];
-
-        // Incident type mapping (for display purposes)
-        $incidentTypes = [
-            'illegal_logging' => 'Illegal Logging',
-            'pollution' => 'Pollution',
-            'wildlife_crime' => 'Wildlife Crime',
-            'illegal_waste_disposal' => 'Illegal Waste Disposal',
-            'other' => 'Other'
-        ];
+        // Badge classes come from the enums. This copy also keyed incidentTypes by
+        // snake_case values the database never held, so the type filter here matched
+        // nothing — the same defect as the admin list, in a second place.
+        $incidentTypes = IncidentType::options();
 
         return view('user.incidents', compact(
             'incidents',
             'stats',
-            'statusBadgeClasses',
-            'priorityBadgeClasses',
             'incidentTypes'
         ));
     }

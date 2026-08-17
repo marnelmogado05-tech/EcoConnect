@@ -96,7 +96,7 @@ class IncidentFollowupController extends Controller
         }
 
         // Redirect based on where the request came from
-        $routeName = (Auth::user()?->role === 'admin') ? 'admin.incidents' : 'incidents';
+        $routeName = Auth::user()?->isAdmin() ? 'admin.incidents' : 'incidents';
 
         return redirect()->route($routeName)
             ->with('success', 'Staff response posted successfully!');

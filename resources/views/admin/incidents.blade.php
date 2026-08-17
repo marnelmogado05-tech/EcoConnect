@@ -200,7 +200,7 @@
                                         </td>
                                         <td>
                                             <span class="badge bg-secondary">
-                                                {{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}
+                                                {{ $incident->incident_type?->label() }}
                                             </span>
                                         </td>
                                         <td>
@@ -212,13 +212,13 @@
                                             </small>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $priorityBadgeClasses[$incident->priority] }}">
-                                                <i class="fas fa-flag me-1"></i>{{ $incident->priority }}
+                                            <span class="badge {{ $incident->priority?->badgeClass() }}">
+                                                <i class="fas fa-flag me-1"></i>{{ $incident->priority?->value }}
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {{ $statusBadgeClasses[$incident->status] }}">
-                                                {{ $incident->status }}
+                                            <span class="badge {{ $incident->status?->badgeClass() }}">
+                                                {{ $incident->status?->value }}
                                             </span>
                                         </td>
                                         <td>
@@ -251,7 +251,7 @@
                                                     </button>
                                                 @endif
 
-                                                @if($incident->status === 'Pending')
+                                                @if($incident->status?->value === 'Pending')
                                                     <!-- Assign to Police Button -->
                                                     <button class="btn btn-outline-success"
                                                             data-bs-toggle="modal"
@@ -297,8 +297,8 @@
                                                         <div class="col-md-6">
                                                             <h6>Status</h6>
                                                             <p>
-                                                                <span class="badge {{ $statusBadgeClasses[$incident->status] }}">
-                                                                    {{ $incident->status }}
+                                                                <span class="badge {{ $incident->status?->badgeClass() }}">
+                                                                    {{ $incident->status?->value }}
                                                                 </span>
                                                             </p>
                                                         </div>
@@ -307,13 +307,13 @@
                                                     <div class="mt-3 row">
                                                         <div class="col-md-6">
                                                             <h6>Incident Type</h6>
-                                                            <p>{{ $incidentTypes[$incident->incident_type] ?? $incident->incident_type }}</p>
+                                                            <p>{{ $incident->incident_type?->label() }}</p>
                                                         </div>
                                                         <div class="col-md-6">
                                                             <h6>Priority</h6>
                                                             <p>
-                                                                <span class="badge {{ $priorityBadgeClasses[$incident->priority] }}">
-                                                                    {{ $incident->priority }}
+                                                                <span class="badge {{ $incident->priority?->badgeClass() }}">
+                                                                    {{ $incident->priority?->value }}
                                                                 </span>
                                                             </p>
                                                         </div>
@@ -465,9 +465,9 @@
                                                         <div class="mb-3">
                                                             <label for="priority" class="form-label">Priority Level</label>
                                                             <select class="form-select" id="priority" name="priority" required>
-                                                                <option value="Normal" {{ $incident->priority == 'Normal' ? 'selected' : '' }}>Normal</option>
-                                                                <option value="High" {{ $incident->priority == 'High' ? 'selected' : '' }}>High</option>
-                                                                <option value="Urgent" {{ $incident->priority == 'Urgent' ? 'selected' : '' }}>Urgent</option>
+                                                                <option value="Normal" {{ $incident->priority?->value === 'Normal' ? 'selected' : '' }}>Normal</option>
+                                                                <option value="High" {{ $incident->priority?->value === 'High' ? 'selected' : '' }}>High</option>
+                                                                <option value="Urgent" {{ $incident->priority?->value === 'Urgent' ? 'selected' : '' }}>Urgent</option>
                                                             </select>
                                                         </div>
                                                     </div>

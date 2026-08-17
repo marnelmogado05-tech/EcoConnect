@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\IncidentPriority;
+use App\Enums\IncidentStatus;
 use App\Events\IncidentReported;
 use App\Events\IncidentStatusChanged;
 use App\Jobs\ValidateIncidentLocation;
@@ -60,8 +62,8 @@ test('a citizen can file a report', function () {
     $incident = Incident::sole();
 
     expect($incident->user_id)->toBe($user->id)
-        ->and($incident->status)->toBe('Pending')
-        ->and($incident->priority)->toBe('Normal')
+        ->and($incident->status)->toBe(IncidentStatus::Pending)
+        ->and($incident->priority)->toBe(IncidentPriority::Normal)
         ->and($incident->reference_number)->toMatch('/^DENR-\d{4}-[A-Z0-9]{6}$/');
 
     Event::assertDispatched(IncidentReported::class);
@@ -99,8 +101,8 @@ test('an admin can assign an incident at urgent priority', function () {
     $incident->refresh();
 
     // Both of these values were rejected by the original column definitions.
-    expect($incident->status)->toBe('Assigned')
-        ->and($incident->priority)->toBe('Urgent')
+    expect($incident->status)->toBe(IncidentStatus::Assigned)
+        ->and($incident->priority)->toBe(IncidentPriority::Urgent)
         ->and($incident->assigned_to)->toBe($responder->id)
         ->and($incident->assigned_at)->not->toBeNull();
 
@@ -140,7 +142,7 @@ test('an officer can take an incident into action', function () {
 
     $incident->refresh();
 
-    expect($incident->status)->toBe('In Progress')
+    expect($incident->status)->toBe(IncidentStatus::InProgress)
         ->and($incident->date_taken_into_action)->not->toBeNull();
 
     expect(IncidentAcknowledgement::where('incident_id', $incident->id)
@@ -151,7 +153,7 @@ test('an officer can take an incident into action', function () {
 test('an admin can resolve an incident', function () {
     Mail::fake();
 
-    $incident = Incident::factory()->status('In Progress')->create();
+    $incident = Incident::factory()->status(IncidentStatus::InProgress)->create();
 
     $response = $this->actingAs(admin())->put("/admin/incidents/resolve/{$incident->id}", [
         'resolution_details' => 'Site restored and the report was filed with CENRO.',
@@ -161,7 +163,7 @@ test('an admin can resolve an incident', function () {
 
     $incident->refresh();
 
-    expect($incident->status)->toBe('Resolved')
+    expect($incident->status)->toBe(IncidentStatus::Resolved)
         ->and($incident->resolution_details)->toContain('CENRO')
         ->and($incident->resolved_date)->not->toBeNull();
 
@@ -181,7 +183,7 @@ test('an admin can reject an incident and the assignment is cleared', function (
 
     $incident->refresh();
 
-    expect($incident->status)->toBe('Rejected')
+    expect($incident->status)->toBe(IncidentStatus::Rejected)
         ->and($incident->rejection_reason)->toContain('Duplicate')
         ->and($incident->assigned_to)->toBeNull();
 
@@ -194,8 +196,8 @@ test('each status change announces itself exactly once', function () {
     $first = Incident::factory()->create();
     $second = Incident::factory()->create();
 
-    $first->update(['status' => 'In Progress']);
-    $second->update(['status' => 'Resolved']);
+    $first->update(['status' => IncidentStatus::InProgress]);
+    $second->update(['status' => IncidentStatus::Resolved]);
 
     // The replaced boot() hook registered a new listener on every save, so the second
     // update also re-fired the first incident's listener. Two updates, two events.
@@ -205,7 +207,7 @@ test('each status change announces itself exactly once', function () {
 test('updating a field other than status announces nothing', function () {
     Event::fake([IncidentStatusChanged::class]);
 
-    Incident::factory()->create()->update(['priority' => 'High']);
+    Incident::factory()->create()->update(['priority' => IncidentPriority::High]);
 
     Event::assertNotDispatched(IncidentStatusChanged::class);
 });

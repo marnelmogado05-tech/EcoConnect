@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Barangay extends Model
 {
@@ -14,7 +15,11 @@ class Barangay extends Model
         'municipality_id'
     ];
 
-    public function municipalities()
+    /**
+     * A barangay belongs to one municipality. This was named municipalities(), plural,
+     * which reads as a has-many and made call sites hard to trust.
+     */
+    public function municipality(): BelongsTo
     {
         return $this->belongsTo(Municipality::class);
     }

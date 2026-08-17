@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Enums\IncidentStatus;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,16 +26,16 @@ class AdminbfpController extends Controller
                     ->withCount([
                         'assignedIncidents as total_assigned_reports',
                         'assignedIncidents as not_yet_responded_reports' => function($q) {
-                            $q->where('status', 'Assigned');
+                            $q->where('status', IncidentStatus::Assigned);
                         },
                         'assignedIncidents as in_progress_reports' => function($q) {
-                            $q->where('status', 'In Progress');
+                            $q->where('status', IncidentStatus::InProgress);
                         },
                         'assignedIncidents as in_progress_reports' => function($q) {
-                            $q->where('status', 'In Progress');
+                            $q->where('status', IncidentStatus::InProgress);
                         },
                         'assignedIncidents as resolved_reports' => function($q) {
-                            $q->where('status', 'Resolved');
+                            $q->where('status', IncidentStatus::Resolved);
                         }
                     ]);
 
@@ -57,27 +59,27 @@ class AdminbfpController extends Controller
         // Get overall statistics for bfp
         $stats = [
             'total' => User::where('role', 'bfp')->count(),
-            'active' => User::where('role', 'bfp')->where('status', 'Active')->count(),
-            'suspended' => User::where('role', 'bfp')->where('status', 'Suspended')->count(),
+            'active' => User::where('role', 'bfp')->where('status', UserStatus::Active)->count(),
+            'suspended' => User::where('role', 'bfp')->where('status', UserStatus::Suspended)->count(),
             'assigned_reports' => \App\Models\Incident::whereNotNull('assigned_to')
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'bfp');
                                         })
                                         ->count(),
             'not_yet_responded_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                        ->where('status', 'Assigned')
+                                        ->where('status', IncidentStatus::Assigned)
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'bfp');
                                         })
                                         ->count(),
             'in_progress_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                        ->where('status', 'In Progress')
+                                        ->where('status', IncidentStatus::InProgress)
                                         ->whereHas('assignedTo', function($q) {
                                             $q->where('role', 'bfp');
                                         })
                                         ->count(),
             'resolved_reports' => \App\Models\Incident::whereNotNull('assigned_to')
-                                    ->where('status', 'Resolved')
+                                    ->where('status', IncidentStatus::Resolved)
                                     ->whereHas('assignedTo', function($q) {
                                         $q->where('role', 'bfp');
                                     })
@@ -101,10 +103,10 @@ class AdminbfpController extends Controller
         $bfp = User::where('role', 'bfp')
                     ->withCount(['assignedIncidents as total_reports',
                                 'assignedIncidents as in_progress_reports' => function($q) {
-                                    $q->where('status', 'In Progress');
+                                    $q->where('status', IncidentStatus::InProgress);
                                 },
                                 'assignedIncidents as resolved_reports' => function($q) {
-                                    $q->where('status', 'Resolved');
+                                    $q->where('status', IncidentStatus::Resolved);
                                 }])
                     ->with(['assignedIncidents' => function($q) {
                         $q->with(['user'])
@@ -164,7 +166,7 @@ class AdminbfpController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => 'bfp',
-            'status' => 'Active',
+            'status' => UserStatus::Active,
         ]);
 
         return redirect()->route('admin.bfp')->with('success', "bfp Officer added successfully.");

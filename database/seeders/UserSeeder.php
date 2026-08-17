@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\UserStatus;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\User;
@@ -59,7 +60,7 @@ class UserSeeder extends Seeder
                     'phone' => '09000000000',
                     'password' => Hash::make($password),
                     'role' => $role,
-                    'status' => 'Active',
+                    'status' => UserStatus::Active,
                     'email_verified_at' => now(),
                     'municipality_id' => $municipality?->id,
                     'barangay_id' => $barangay?->id,

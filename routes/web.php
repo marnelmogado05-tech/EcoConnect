@@ -4,7 +4,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\User\UserIncidentController;
 use App\Http\Controllers\User\UserDashboardController;
 use App\Http\Controllers\User\TrackIncidentController;
-use App\Http\Controllers\StorageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\IdCardController;
 use App\Http\Controllers\MediaEvidenceController;
@@ -94,9 +93,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/incidents/{incident}/respond', [IncidentFollowupController::class, 'respond'])->name('followups.respond');
     Route::get('/incidents/{incident}/followups', [IncidentFollowupController::class, 'show'])->name('followups.show');
 
-    // Notification Routes
-    Route::post('/api/notifications/save-token', [NotificationController::class, 'saveFcmToken'])->name('notifications.save-token');
-    Route::post('/api/notifications/remove-token', [NotificationController::class, 'removeFcmToken'])->name('notifications.remove-token');
-    Route::post('/api/notifications/remove-all', [NotificationController::class, 'removeAllTokens'])->name('notifications.remove-all');
-    Route::get('/api/notifications/status', [NotificationController::class, 'getNotificationStatus'])->name('notifications.status');
+    // Browser push subscriptions. Named for what they are; the previous names described
+    // FCM tokens, which this application has never used.
+    Route::post('/api/notifications/subscribe', [NotificationController::class, 'subscribe'])->name('notifications.subscribe');
+    Route::post('/api/notifications/unsubscribe', [NotificationController::class, 'unsubscribe'])->name('notifications.unsubscribe');
+    Route::post('/api/notifications/unsubscribe-all', [NotificationController::class, 'unsubscribeAll'])->name('notifications.unsubscribe-all');
+    Route::get('/api/notifications/status', [NotificationController::class, 'status'])->name('notifications.status');
 });

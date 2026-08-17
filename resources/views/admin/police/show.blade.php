@@ -32,8 +32,8 @@
                                 {{ strtoupper(substr($police->fname, 0, 1)) }}{{ strtoupper(substr($police->lname, 0, 1)) }}
                             </div>
                             <h4>{{ $police->fname }} {{ $police->lname }}</h4>
-                            <span class="badge {{ $police->status == 'Active' ? 'bg-success' : 'bg-danger' }} mb-3">
-                                {{ ucfirst($police->status) }}
+                            <span class="badge {{ $police->status?->value === 'Active' ? 'bg-success' : 'bg-danger' }} mb-3">
+                                {{ $police->status?->label() }}
                             </span>
 
                             <div class="mt-4 text-start">
@@ -132,14 +132,14 @@
                                             @foreach($recentIncidents as $incident)
                                             <tr>
                                                 <td>{{ $incident->reference_number }}</td>
-                                                <td>{{ $incident->incident_type }}</td>
+                                                <td>{{ $incident->incident_type?->value }}</td>
                                                 <td>
                                                     <span class="badge 
-                                                        @if($incident->status == 'Resolved') bg-success
-                                                        @elseif($incident->status == 'In Progress') bg-primary
-                                                        @elseif($incident->status == 'Rejected') bg-danger
+                                                        @if($incident->status?->value === 'Resolved') bg-success
+                                                        @elseif($incident->status?->value === 'In Progress') bg-primary
+                                                        @elseif($incident->status?->value === 'Rejected') bg-danger
                                                         @else bg-secondary @endif">
-                                                        {{ $incident->status }}
+                                                        {{ $incident->status?->value }}
                                                     </span>
                                                 </td>
                                                 <td>{{ $incident->created_at->format('M j, Y') }}</td>

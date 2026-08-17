@@ -2,6 +2,7 @@
 
 namespace App\Listeners;
 
+use App\Enums\UserStatus;
 use App\Events\UserRegistered;
 use App\Jobs\SendPushNotification;
 use App\Models\User;
@@ -24,7 +25,7 @@ class SendNewUserNotification implements ShouldQueue
     {
         // Send notification to all staff about new registration
         $staff = User::whereIn('role', ['admin', 'police', 'bfp'])
-            ->where('status', 'Active')
+            ->where('status', UserStatus::Active)
             ->get();
 
         if ($staff->isNotEmpty()) {

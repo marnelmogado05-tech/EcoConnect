@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\UserRole;
 use App\Models\Incident;
 use App\Models\User;
 
@@ -21,7 +22,7 @@ class IncidentPolicy
      */
     private function isAdmin(User $user): bool
     {
-        return $user->role === 'admin';
+        return $user->role === UserRole::Admin;
     }
 
     /**
@@ -29,7 +30,7 @@ class IncidentPolicy
      */
     private function isResponder(User $user): bool
     {
-        return in_array($user->role, ['police', 'bfp'], true);
+        return $user->isResponder();
     }
 
     private function isAssignedTo(User $user, Incident $incident): bool
