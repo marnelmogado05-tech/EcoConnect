@@ -46,6 +46,9 @@ class Incident extends Model
         'location_validated',
         'location_is_valid',
         'validated_locations',
+        'municipality_id',
+        'municipality_name',
+        'address',
     ];
 
     /**
@@ -339,6 +342,14 @@ class Incident extends Model
      * transitions now belong to IncidentWorkflowService, which is the only thing that
      * moves an incident between statuses.
      */
+
+    /**
+     * Where the incident happened, resolved once by ResolveIncidentLocation.
+     */
+    public function municipality(): BelongsTo
+    {
+        return $this->belongsTo(Municipality::class);
+    }
 
     public function acknowledgement(): HasOne
     {

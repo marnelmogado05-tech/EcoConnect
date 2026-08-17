@@ -216,7 +216,7 @@
                                     <div class="media-info">
                                         @if($image->latitude && $image->longitude)
                                         <div style=" margin-top: 5px;">
-                                            📍 {{ $image->address }}
+                                            📍 {{ $image->display_address }}
                                         </div>
                                         @endif
                                     </div>
@@ -237,7 +237,7 @@
                                     <div class="media-info">
                                         <div style=" margin-top: 5px;">
                                             @if($video->latitude && $video->longitude)
-                                            <div>📍 {{ $video->address }}</div>
+                                            <div>📍 {{ $video->display_address }}</div>
                                             @endif
                                         </div>
                                     </div>

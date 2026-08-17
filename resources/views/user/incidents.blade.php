@@ -455,7 +455,7 @@
                                                                             </small>
                                                                             @if($image->latitude && $image->longitude)
                                                                                 <small class="mb-2 text-muted d-block">
-                                                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ $image->address }}
+                                                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ $image->display_address }}
                                                                                 </small>
                                                                             @endif
                                                                             <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ $image->url }}', '{{ $image->file_name }}')" style="border-radius: 20px;">
@@ -490,7 +490,7 @@
                                                                             </small>
                                                                             @if($video->latitude && $video->longitude)
                                                                                 <small class="mb-2 text-muted d-block">
-                                                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ $video->address }}
+                                                                                    <i class="fas fa-map-marker-alt me-1"></i>{{ $video->display_address }}
                                                                                 </small>
                                                                             @endif
                                                                             <button class="btn btn-outline-primary btn-sm w-100" onclick="downloadFile('{{ $video->url }}', '{{ $video->file_name }}')" style="border-radius: 20px;">

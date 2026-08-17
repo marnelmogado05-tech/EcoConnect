@@ -4,7 +4,7 @@ use App\Enums\IncidentPriority;
 use App\Enums\IncidentStatus;
 use App\Events\IncidentReported;
 use App\Events\IncidentStatusChanged;
-use App\Jobs\ValidateIncidentLocation;
+use App\Jobs\ResolveIncidentLocation;
 use App\Mail\IncidentAssignedMail;
 use App\Mail\IncidentRejectedMail;
 use App\Mail\IncidentReportedEmail;
@@ -67,7 +67,7 @@ test('a citizen can file a report', function () {
         ->and($incident->reference_number)->toMatch('/^DENR-\d{4}-[A-Z0-9]{6}$/');
 
     Event::assertDispatched(IncidentReported::class);
-    Queue::assertPushed(ValidateIncidentLocation::class);
+    Queue::assertPushed(ResolveIncidentLocation::class);
     Mail::assertQueued(IncidentReportedEmail::class);
 });
 

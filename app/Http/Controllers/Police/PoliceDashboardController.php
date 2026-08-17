@@ -52,10 +52,12 @@ class PoliceDashboardController extends Controller
         // Monthly incidents last 12 months
         $monthlyIncidents = Incident::where('assigned_to', $userId)
             ->where('created_at', '>=', Carbon::now()->subMonths(12))
-            ->select(DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'), DB::raw('count(*) as count'))
-            ->groupBy('month')
-            ->orderBy('month')
-            ->pluck('count', 'month')
+            ->get(['created_at'])
+            // DATE_FORMAT is MySQL-only, which is why this page could not run on
+            // any other connection. Twelve months of rows group fine in PHP.
+            ->groupBy(fn ($row) => $row->created_at->format('Y-m'))
+            ->map(fn ($rows) => $rows->count())
+            ->sortKeys()
             ->toArray();
 
         // Avg resolution time for resolved incidents

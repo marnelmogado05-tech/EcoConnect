@@ -67,18 +67,9 @@ class AdminAnalyticsController extends Controller
 
         // Monthly incidents for the last 12 months (or filtered period if shorter)
         $monthlyStartDate = $dateFrom ?: Carbon::now()->subMonths(12);
-        $monthlyIncidents = Incident::selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, COUNT(*) as count')
-            ->where('created_at', '>=', $monthlyStartDate)
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'month' => Carbon::create($item->year, $item->month)->format('M Y'),
-                    'count' => $item->count
-                ];
-            });
+        $monthlyIncidents = $this->countByMonth(
+            Incident::where('created_at', '>=', $monthlyStartDate)
+        );
 
         // User statistics (filtered by date if applicable)
         $userQuery = User::when($dateFrom, function ($query) use ($dateFrom) {
@@ -93,18 +84,9 @@ class AdminAnalyticsController extends Controller
 
         // Monthly user registrations for the last 12 months (or filtered period)
         $userMonthlyStartDate = $dateFrom ?: Carbon::now()->subMonths(12);
-        $monthlyUsers = User::selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, COUNT(*) as count')
-            ->where('created_at', '>=', $userMonthlyStartDate)
-            ->groupBy('year', 'month')
-            ->orderBy('year')
-            ->orderBy('month')
-            ->get()
-            ->map(function ($item) {
-                return [
-                    'month' => Carbon::create($item->year, $item->month)->format('M Y'),
-                    'count' => $item->count
-                ];
-            });
+        $monthlyUsers = $this->countByMonth(
+            User::where('created_at', '>=', $userMonthlyStartDate)
+        );
 
         // Incidents by municipality
         $incidentsByMunicipality = $this->getIncidentsByMunicipality();
@@ -129,11 +111,25 @@ class AdminAnalyticsController extends Controller
             ->sortByDesc('resolved')
             ->take(10);
 
-        // Average resolution time (in days) - filtered by date
-        $avgResolutionTime = (clone $incidentQuery)->whereNotNull('resolved_date')
-            ->selectRaw('AVG(DATEDIFF(resolved_date, created_at)) as avg_days')
-            ->first()
-            ->avg_days ?? 0;
+        // Average resolution time in days.
+        //
+        // DATEDIFF is MySQL-only, so this page could not run on any other connection and
+        // its test was skipped outside MySQL. Computed in PHP over the resolved rows
+        // instead, which is portable and — since only resolved incidents are read — no
+        // more expensive in practice.
+        $resolvedDates = (clone $incidentQuery)
+            ->whereNotNull('resolved_date')
+            ->get(['created_at', 'resolved_date']);
+
+        $avgResolutionTime = $resolvedDates->isEmpty()
+            ? 0
+            : round(
+                $resolvedDates->avg(
+                    fn ($incident) => $incident->created_at->startOfDay()
+                        ->diffInDays($incident->resolved_date->startOfDay())
+                ),
+                1
+            );
 
         // Current period for display
         $currentPeriod = $period;
@@ -160,42 +156,46 @@ class AdminAnalyticsController extends Controller
     }
 
     /**
-     * Get incidents grouped by municipality using LocationService
+     * Group a query into monthly counts without database-specific date functions.
+     *
+     * YEAR() and MONTH() are MySQL-only. Grouping on the stored timestamp's date prefix
+     * works on every supported driver, and the month count here is bounded (twelve, or
+     * fewer for a filtered period), so building the labels in PHP costs nothing.
+     *
+     * @return \Illuminate\Support\Collection<int, array{month: string, count: int}>
      */
-    private function getIncidentsByMunicipality()
+    private function countByMonth($query)
     {
-        $locationService = app(LocationService::class);
-        $municipalityCounts = collect();
+        return $query->reorder()
+            ->get(['created_at'])
+            ->groupBy(fn ($row) => $row->created_at->format('Y-m'))
+            ->map(fn ($rows, $month) => [
+                'month' => Carbon::createFromFormat('Y-m', $month)->format('M Y'),
+                'count' => $rows->count(),
+            ])
+            ->sortKeys()
+            ->values();
+    }
 
-        // Get incidents with media evidence that have coordinates
-        $incidents = Incident::with(['mediaEvidence' => function($q) {
-            $q->whereNotNull('latitude')->whereNotNull('longitude');
-        }])->whereHas('mediaEvidence', function($q) {
-            $q->whereNotNull('latitude')->whereNotNull('longitude');
-        })->limit(100) // Limit for performance
-          ->get();
-
-        foreach ($incidents as $incident) {
-            foreach ($incident->mediaEvidence as $media) {
-                try {
-                    $municipality = $locationService->getMunicipalityFromCoordinates(
-                        $media->latitude,
-                        $media->longitude
-                    );
-
-                    if ($municipality) {
-                        $municipalityCounts[$municipality] = ($municipalityCounts[$municipality] ?? 0) + 1;
-                        break; // Count once per incident
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("Geocoding failed for media {$media->id}: " . $e->getMessage());
-                    continue;
-                }
-            }
-            // Small delay to respect API rate limits
-            usleep(200000); // 200ms delay
-        }
-
-        return $municipalityCounts->toArray();
+    /**
+     * Incident counts per municipality.
+     *
+     * One grouped query over a column resolved at write time. This previously loaded up
+     * to 100 incidents and reverse-geocoded each one against Nominatim with a 200ms
+     * sleep between calls, so the analytics page took upwards of twenty seconds and was
+     * capped at 100 incidents — meaning the chart was wrong as soon as the table grew
+     * past that.
+     *
+     * @return array<string, int>
+     */
+    private function getIncidentsByMunicipality(): array
+    {
+        return Incident::query()
+            ->whereNotNull('municipality_name')
+            ->selectRaw('municipality_name, COUNT(*) as total')
+            ->groupBy('municipality_name')
+            ->orderByDesc('total')
+            ->pluck('total', 'municipality_name')
+            ->toArray();
     }
 }
